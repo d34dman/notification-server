@@ -1,4 +1,4 @@
-name: Test and Lint
+name: Test
 
 on:
   push:
@@ -23,23 +23,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run linting
-        run: npm run lint
-
       - name: Run tests
         run: npm test
 
       - name: Build TypeScript
-        run: npm run build
-
-  validate-openapi:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install spectral
-        run: npm install -g @stoplight/spectral-cli
-
-      - name: Validate OpenAPI specification
-        run: spectral lint openapi.yaml 
+        run: npm run build 

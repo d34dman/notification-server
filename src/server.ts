@@ -30,8 +30,8 @@ class NotificationServer {
     // Publish endpoint
     this.app.post("/publish", async (req: Request<{}, {}, PublishRequest>, res: Response) => {
       try {
-        const { channel, content, metadata }: PublishRequest = req.body;
-        
+        const { channel, content, metadata } = req.body;
+
         if (!channel || !content) {
           return res.status(400).json({ error: "Channel and content are required" });
         }
@@ -41,7 +41,7 @@ class NotificationServer {
           channel,
           content,
           timestamp: Date.now(),
-          metadata
+          metadata,
         };
 
         // Store in Redis
@@ -52,46 +52,62 @@ class NotificationServer {
 
         res.json({ success: true, notificationId: notification.id });
       } catch (error) {
-        console.error("Publish error:", error);
+        console.error("Publish error:", error instanceof Error ? error.message : "Unknown error");
         res.status(500).json({ error: "Failed to publish notification" });
       }
     });
 
     // Subscribe endpoint
-    this.app.post("/subscribe", async (req: Request<{}, {}, SubscriptionRequest>, res: Response) => {
-      try {
-        const { channel, clientId }: SubscriptionRequest = req.body;
+    this.app.post(
+      "/subscribe",
+      async (req: Request<{}, {}, SubscriptionRequest>, res: Response) => {
+        try {
+          const { channel, clientId } = req.body;
 
-        if (!channel || !clientId) {
-          return res.status(400).json({ error: "Channel and clientId are required" });
+          if (!channel || !clientId) {
+            return res.status(400).json({ error: "Channel and clientId are required" });
+          }
+
+          // Store subscription in Redis
+          await this.redisManager.storeSubscription(clientId, channel);
+
+          // Subscribe to channel in ZeroMQ
+          await this.subscriber.subscribe(channel);
+
+          res.json({ success: true, message: `Subscribed to channel: ${channel}` });
+        } catch (error) {
+          console.error(
+            "Subscribe error:",
+            error instanceof Error ? error.message : "Unknown error"
+          );
+          res.status(500).json({ error: "Failed to subscribe to channel" });
         }
-
-        // Store subscription in Redis
-        await this.redisManager.storeSubscription(clientId, channel);
-
-        // Subscribe to channel in ZeroMQ
-        await this.subscriber.subscribe(channel);
-
-        res.json({ success: true, message: `Subscribed to channel: ${channel}` });
-      } catch (error) {
-        console.error("Subscribe error:", error);
-        res.status(500).json({ error: "Failed to subscribe to channel" });
       }
-    });
+    );
 
     // Get recent notifications endpoint
-    this.app.get("/notifications/:channel", async (req: Request<{ channel: string }, {}, {}, { count?: string }>, res: Response) => {
-      try {
-        const { channel } = req.params;
-        const count = parseInt(req.query.count || "10");
+    this.app.get(
+      "/notifications/:channel",
+      async (req: Request<{ channel: string }, {}, {}, { count?: string }>, res: Response) => {
+        try {
+          const { channel } = req.params;
+          const count = parseInt(req.query.count || "10", 10);
 
-        const notifications = await this.redisManager.getChannelNotifications(channel, count);
-        res.json({ notifications: notifications.map(n => JSON.parse(n)) });
-      } catch (error) {
-        console.error("Get notifications error:", error);
-        res.status(500).json({ error: "Failed to retrieve notifications" });
+          if (isNaN(count) || count < 1) {
+            return res.status(400).json({ error: "Invalid count parameter" });
+          }
+
+          const notifications = await this.redisManager.getChannelNotifications(channel, count);
+          res.json({ notifications: notifications.map((n) => JSON.parse(n)) });
+        } catch (error) {
+          console.error(
+            "Get notifications error:",
+            error instanceof Error ? error.message : "Unknown error"
+          );
+          res.status(500).json({ error: "Failed to retrieve notifications" });
+        }
       }
-    });
+    );
   }
 
   /**
@@ -115,7 +131,10 @@ class NotificationServer {
         console.log(`Notification server running on port ${port}`);
       });
     } catch (error) {
-      console.error("Failed to start server:", error);
+      console.error(
+        "Failed to start server:",
+        error instanceof Error ? error.message : "Unknown error"
+      );
       process.exit(1);
     }
   }
@@ -129,11 +148,17 @@ class NotificationServer {
         console.log(`Received message on channel ${channel}: ${message}`);
       }
     } catch (error) {
-      console.error("Message loop error:", error);
+      console.error(
+        "Message loop error:",
+        error instanceof Error ? error.message : "Unknown error"
+      );
     }
   }
 }
 
 // Start the server
 const server = new NotificationServer();
-server.start().catch(console.error); 
+server.start().catch((error) => {
+  console.error("Server startup error:", error instanceof Error ? error.message : "Unknown error");
+  process.exit(1);
+});

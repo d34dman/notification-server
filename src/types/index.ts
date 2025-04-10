@@ -44,4 +44,4 @@ export type RedisChannelKey = `notification:channel:${string}`;
 /**
  * Type representing Redis client key format
  */
-export type RedisClientKey = `notification:client:${string}`; 
+export type RedisClientKey = `notification:client:${string}`;

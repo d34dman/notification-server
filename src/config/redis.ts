@@ -1,4 +1,4 @@
-import { createClient } from "redis";
+import Redis from "ioredis";
 import { RedisChannelKey, RedisClientKey } from "../types";
 
 /**
@@ -6,30 +6,27 @@ import { RedisChannelKey, RedisClientKey } from "../types";
  */
 export class RedisManager {
   private static instance: RedisManager;
-  private client;
+  private client: Redis;
 
   private constructor() {
     const redisUrl = new URL(process.env.REDIS_URL || "redis://localhost:6379");
-    
+
     // Add password to URL if provided
     if (process.env.REDIS_PASSWORD) {
       redisUrl.password = process.env.REDIS_PASSWORD;
     }
 
-    this.client = createClient({
-      url: redisUrl.toString(),
-      socket: {
-        reconnectStrategy: (retries) => {
-          if (retries > 10) {
-            console.error("Redis connection failed after 10 retries");
-            return new Error("Redis connection failed");
-          }
-          return Math.min(retries * 100, 3000);
+    this.client = new Redis(redisUrl.toString(), {
+      retryStrategy: (times: number) => {
+        if (times > 10) {
+          console.error("Redis connection failed after 10 retries");
+          return null;
         }
-      }
+        return Math.min(times * 100, 3000);
+      },
     });
 
-    this.client.on("error", (err) => {
+    this.client.on("error", (err: Error) => {
       console.error("Redis Client Error:", err);
     });
 
@@ -52,7 +49,8 @@ export class RedisManager {
    * Connect to Redis
    */
   public async connect(): Promise<void> {
-    await this.client.connect();
+    // No need to explicitly connect with ioredis
+    return Promise.resolve();
   }
 
   /**
@@ -60,7 +58,7 @@ export class RedisManager {
    */
   public async storeNotification(channel: string, notification: string): Promise<void> {
     const key: RedisChannelKey = `notification:channel:${channel}`;
-    await this.client.lPush(key, notification);
+    await this.client.lpush(key, notification);
   }
 
   /**
@@ -68,7 +66,7 @@ export class RedisManager {
    */
   public async storeSubscription(clientId: string, channel: string): Promise<void> {
     const key: RedisClientKey = `notification:client:${clientId}`;
-    await this.client.sAdd(key, channel);
+    await this.client.sadd(key, channel);
   }
 
   /**
@@ -76,7 +74,7 @@ export class RedisManager {
    */
   public async getClientSubscriptions(clientId: string): Promise<string[]> {
     const key: RedisClientKey = `notification:client:${clientId}`;
-    return await this.client.sMembers(key);
+    return await this.client.smembers(key);
   }
 
   /**
@@ -84,13 +82,13 @@ export class RedisManager {
    */
   public async getChannelNotifications(channel: string, count: number): Promise<string[]> {
     const key: RedisChannelKey = `notification:channel:${channel}`;
-    return await this.client.lRange(key, 0, count - 1);
+    return await this.client.lrange(key, 0, count - 1);
   }
 
   /**
    * Disconnect from Redis
    */
   public async disconnect(): Promise<void> {
-    await this.client.disconnect();
+    await this.client.quit();
   }
-} 
+}
