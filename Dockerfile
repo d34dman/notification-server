@@ -38,7 +38,11 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 
 # Copy environment file
-COPY .env ./
+COPY .env.example .env
+
+# Set build arguments
+ARG REDIS_PASSWORD
+ENV REDIS_PASSWORD=${REDIS_PASSWORD}
 
 # Expose the application port
 EXPOSE 3000
