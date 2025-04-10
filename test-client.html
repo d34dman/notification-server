@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification Server Test Client</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    
+    .panel {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    
+    .connected { background: #e6ffe6; color: #006600; }
+    .disconnected { background: #ffe6e6; color: #660000; }
+    
+    .log {
+      height: 200px;
+      overflow-y: auto;
+      background: #f8f8f8;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    
+    input, button {
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    
+    input {
+      width: calc(100% - 16px);
+      border: 1px solid #ddd;
+    }
+    
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    
+    button:hover { background: #0056b3; }
+    button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+    
+    .tabs {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      background: #f8f8f8;
+    }
+    
+    .tab.active {
+      background: white;
+      border-bottom: none;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>Notification Server Test Client</h1>
+  
+  <div class="container">
+    <div class="panel">
+      <h2>WebSocket Connection</h2>
+      <div>
+        <label for="wsUrl">WebSocket URL:</label>
+        <input type="text" id="wsUrl" value="ws://localhost:8080">
+        <small style="display: block; color: #666; margin-top: 5px;">Note: WebSocket server runs on port 8080, HTTP API on port 3000</small>
+      </div>
+      <div>
+        <label for="apiUrl">HTTP API URL:</label>
+        <input type="text" id="apiUrl" value="http://localhost:3000">
+        <small style="display: block; color: #666; margin-top: 5px;">Base URL for HTTP API endpoints</small>
+      </div>
+      <div>
+        <label for="clientId">Client ID:</label>
+        <input type="text" id="clientId" readonly>
+      </div>
+      <div>
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+      </div>
+      <div id="wsStatus" class="status disconnected">Disconnected</div>
+      <div class="log" id="wsLog"></div>
+    </div>
+    
+    <div class="panel">
+      <h2>Channel Operations</h2>
+      <div>
+        <label for="channel">Channel:</label>
+        <input type="text" id="channel" value="test-channel" placeholder="Enter channel name">
+      </div>
+      <div>
+        <button id="subscribeBtn" disabled>Subscribe</button>
+        <button id="unsubscribeBtn" disabled>Unsubscribe</button>
+      </div>
+      <div class="tabs">
+        <div class="tab active" data-tab="publish">Publish</div>
+        <div class="tab" data-tab="history">History</div>
+      </div>
+      <div class="tab-content active" id="publishTab">
+        <div>
+          <label for="message">Message:</label>
+          <input type="text" id="message" value="Hello, this is a test message!" placeholder="Enter notification message">
+        </div>
+        <button id="publishBtn" disabled>Publish</button>
+      </div>
+      <div class="tab-content" id="historyTab">
+        <button id="getHistoryBtn" disabled>Get History</button>
+        <div class="log" id="historyLog"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let ws = null;
+    let clientId = null;
+    
+    // DOM Elements
+    const wsUrlInput = document.getElementById('wsUrl');
+    const apiUrlInput = document.getElementById('apiUrl');
+    const clientIdInput = document.getElementById('clientId');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const wsStatus = document.getElementById('wsStatus');
+    const wsLog = document.getElementById('wsLog');
+    const channelInput = document.getElementById('channel');
+    const subscribeBtn = document.getElementById('subscribeBtn');
+    const unsubscribeBtn = document.getElementById('unsubscribeBtn');
+    const messageInput = document.getElementById('message');
+    const publishBtn = document.getElementById('publishBtn');
+    const getHistoryBtn = document.getElementById('getHistoryBtn');
+    const historyLog = document.getElementById('historyLog');
+    
+    // Tab handling
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`${tab.dataset.tab}Tab`).classList.add('active');
+      });
+    });
+    
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.textContent = `[${new Date().toISOString()}] ${message}`;
+      entry.style.color = type === 'error' ? 'red' : 'inherit';
+      wsLog.appendChild(entry);
+      wsLog.scrollTop = wsLog.scrollHeight;
+    }
+    
+    function updateButtonStates() {
+      const isConnected = ws && ws.readyState === WebSocket.OPEN;
+      connectBtn.disabled = isConnected;
+      disconnectBtn.disabled = !isConnected;
+      subscribeBtn.disabled = !isConnected;
+      unsubscribeBtn.disabled = !isConnected;
+      publishBtn.disabled = !isConnected;
+      getHistoryBtn.disabled = !isConnected;
+    }
+    
+    connectBtn.addEventListener('click', () => {
+      try {
+        const url = wsUrlInput.value;
+        log(`Connecting to ${url}...`);
+        
+        // Clear any existing connection
+        if (ws) {
+          ws.close();
+          ws = null;
+        }
+        
+        ws = new WebSocket(url);
+        
+        ws.onopen = () => {
+          wsStatus.textContent = 'Connected';
+          wsStatus.className = 'status connected';
+          updateButtonStates();
+          log('Connected to WebSocket server');
+        };
+        
+        ws.onclose = (event) => {
+          wsStatus.textContent = 'Disconnected';
+          wsStatus.className = 'status disconnected';
+          updateButtonStates();
+          log(`Disconnected from WebSocket server${event.reason ? `: ${event.reason}` : ''} (code: ${event.code})`, 'error');
+          if (event.code === 1006) {
+            log('Connection closed abnormally. This might indicate a server issue or network problem.', 'error');
+          }
+          ws = null;
+          clientId = null;
+          clientIdInput.value = '';
+        };
+        
+        ws.onerror = (error) => {
+          const errorMessage = error.message || 'Connection failed';
+          log(`WebSocket error: ${errorMessage}`, 'error');
+          log(`ReadyState: ${ws ? ws.readyState : 'unknown'}`, 'error');
+          log('Please ensure the server is running and accessible', 'error');
+          wsStatus.textContent = 'Connection Error';
+          wsStatus.className = 'status disconnected';
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'connection') {
+              clientId = data.clientId;
+              clientIdInput.value = clientId;
+              log(`Received client ID: ${clientId}`);
+            } else if (data.type === 'notification') {
+              log(`Received notification: ${JSON.stringify(data.data)}`);
+            } else if (data.type === 'error') {
+              log(data.message, 'error');
+            }
+          } catch (error) {
+            log(`Error parsing message: ${error.message}`, 'error');
+          }
+        };
+      } catch (error) {
+        log(`Connection error: ${error.message}`, 'error');
+      }
+    });
+    
+    disconnectBtn.addEventListener('click', () => {
+      if (ws) {
+        ws.close();
+      }
+    });
+    
+    subscribeBtn.addEventListener('click', async () => {
+      const channel = channelInput.value.trim();
+      if (!channel) {
+        log('Please enter a channel name', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/channels/${channel}/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        log(`Subscribed to channel: ${channel}`);
+      } catch (error) {
+        log(`Subscription error: ${error.message}`, 'error');
+      }
+    });
+    
+    unsubscribeBtn.addEventListener('click', async () => {
+      const channel = channelInput.value.trim();
+      if (!channel) {
+        log('Please enter a channel name', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/channels/${channel}/unsubscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        log(`Unsubscribed from channel: ${channel}`);
+      } catch (error) {
+        log(`Unsubscription error: ${error.message}`, 'error');
+      }
+    });
+    
+    publishBtn.addEventListener('click', async () => {
+      const channel = channelInput.value.trim();
+      const message = messageInput.value.trim();
+      
+      if (!channel || !message) {
+        log('Please enter both channel and message', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/notifications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel, message })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        log(`Published notification: ${JSON.stringify(data)}`);
+        messageInput.value = '';
+      } catch (error) {
+        log(`Publish error: ${error.message}`, 'error');
+      }
+    });
+    
+    getHistoryBtn.addEventListener('click', async () => {
+      const channel = channelInput.value.trim();
+      if (!channel) {
+        log('Please enter a channel name', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/notifications/${channel}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const notifications = await response.json();
+        historyLog.innerHTML = '';
+        notifications.forEach(notification => {
+          const entry = document.createElement('div');
+          entry.textContent = JSON.stringify(notification);
+          historyLog.appendChild(entry);
+        });
+      } catch (error) {
+        log(`History error: ${error.message}`, 'error');
+      }
+    });
+  </script>
+</body>
+</html> 

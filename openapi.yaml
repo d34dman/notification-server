@@ -1,129 +1,39 @@
-openapi: 3.0.3
+openapi: 3.0.0
 info:
   title: Notification Server API
-  description: |
-    A ZeroMQ-based notification server with Redis storage for managing pub/sub notifications.
-    This API allows clients to publish notifications to specific channels and subscribe to receive notifications.
+  description: API for managing real-time notifications and WebSocket connections
   version: 1.0.0
   contact:
-    name: API Support
     email: support@example.com
 
 servers:
-  - url: http://localhost:3000
-    description: Local development server
-  - url: https://api.example.com
-    description: Production server
-
-tags:
-  - name: notifications
-    description: Operations related to notifications
-  - name: subscriptions
-    description: Operations related to channel subscriptions
+  - url: http://localhost:8080
+    description: Development server
 
 components:
   schemas:
-    NotificationMessage:
+    Notification:
       type: object
       required:
         - id
         - channel
-        - content
+        - message
         - timestamp
       properties:
         id:
           type: string
           format: uuid
           description: Unique identifier for the notification
-          example: "123e4567-e89b-12d3-a456-426614174000"
         channel:
           type: string
-          description: Channel to which the notification belongs
-          example: "news"
-        content:
+          description: Channel name the notification belongs to
+        message:
           type: string
-          description: The actual notification content
-          example: "Breaking news: Important update"
+          description: Notification message content
         timestamp:
           type: integer
           format: int64
-          description: Unix timestamp when the notification was created
-          example: 1647123456789
-        metadata:
-          type: object
-          description: Optional metadata for the notification
-          additionalProperties: true
-          example:
-            priority: "high"
-            category: "alert"
-
-    PublishRequest:
-      type: object
-      required:
-        - channel
-        - content
-      properties:
-        channel:
-          type: string
-          description: Channel to publish to
-          example: "news"
-        content:
-          type: string
-          description: Notification content
-          example: "Breaking news: Important update"
-        metadata:
-          type: object
-          description: Optional metadata
-          additionalProperties: true
-          example:
-            priority: "high"
-            category: "alert"
-
-    PublishResponse:
-      type: object
-      required:
-        - success
-        - notificationId
-      properties:
-        success:
-          type: boolean
-          description: Whether the publish operation was successful
-          example: true
-        notificationId:
-          type: string
-          format: uuid
-          description: ID of the published notification
-          example: "123e4567-e89b-12d3-a456-426614174000"
-
-    SubscriptionRequest:
-      type: object
-      required:
-        - channel
-        - clientId
-      properties:
-        channel:
-          type: string
-          description: Channel to subscribe to
-          example: "news"
-        clientId:
-          type: string
-          description: Unique identifier for the client
-          example: "client-123"
-
-    SubscriptionResponse:
-      type: object
-      required:
-        - success
-        - message
-      properties:
-        success:
-          type: boolean
-          description: Whether the subscription was successful
-          example: true
-        message:
-          type: string
-          description: Success message
-          example: "Subscribed to channel: news"
+          description: Unix timestamp in milliseconds
 
     Error:
       type: object
@@ -133,82 +43,54 @@ components:
         error:
           type: string
           description: Error message
-          example: "Channel and content are required"
 
 paths:
-  /publish:
+  /api/notifications:
     post:
-      tags:
-        - notifications
-      summary: Publish a notification to a channel
-      description: Publishes a notification to a specific channel. The notification will be stored in Redis and distributed to all subscribers of that channel.
+      summary: Publish a new notification
+      description: Creates and broadcasts a new notification to a channel
       operationId: publishNotification
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PublishRequest"
+              type: object
+              required:
+                - channel
+                - message
+              properties:
+                channel:
+                  type: string
+                  description: Channel to publish the notification to
+                message:
+                  type: string
+                  description: Notification message content
       responses:
-        "200":
+        '201':
           description: Notification published successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PublishResponse"
-        "400":
+                $ref: '#/components/schemas/Notification'
+        '400':
           description: Invalid request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-        "500":
+                $ref: '#/components/schemas/Error'
+        '500':
           description: Server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: '#/components/schemas/Error'
 
-  /subscribe:
-    post:
-      tags:
-        - subscriptions
-      summary: Subscribe to a channel
-      description: Subscribes a client to a specific channel. The client will receive all future notifications published to that channel.
-      operationId: subscribeToChannel
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SubscriptionRequest"
-      responses:
-        "200":
-          description: Successfully subscribed to channel
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SubscriptionResponse"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /notifications/{channel}:
+  /api/notifications/{channel}:
     get:
-      tags:
-        - notifications
-      summary: Get recent notifications for a channel
-      description: Retrieves recent notifications for a specific channel. The number of notifications returned can be controlled using the count query parameter.
-      operationId: getChannelNotifications
+      summary: Get notification history
+      description: Retrieves recent notifications for a specific channel
+      operationId: getNotifications
       parameters:
         - name: channel
           in: path
@@ -216,8 +98,7 @@ paths:
           schema:
             type: string
           description: Channel name
-          example: "news"
-        - name: count
+        - name: limit
           in: query
           required: false
           schema:
@@ -225,30 +106,101 @@ paths:
             default: 10
             minimum: 1
             maximum: 100
-          description: Number of notifications to retrieve
+          description: Maximum number of notifications to return
       responses:
-        "200":
+        '200':
           description: List of notifications
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - notifications
-                properties:
-                  notifications:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/NotificationMessage"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+        '500':
           description: Server error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error" 
+                $ref: '#/components/schemas/Error'
+
+  /api/channels/{channel}/subscribe:
+    post:
+      summary: Subscribe to a channel
+      description: Subscribe a client to receive notifications from a channel
+      operationId: subscribeToChannel
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Channel name to subscribe to
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - clientId
+              properties:
+                clientId:
+                  type: string
+                  description: WebSocket client ID
+      responses:
+        '200':
+          description: Successfully subscribed to channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/channels/{channel}/unsubscribe:
+    post:
+      summary: Unsubscribe from a channel
+      description: Unsubscribe a client from receiving notifications from a channel
+      operationId: unsubscribeFromChannel
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Channel name to unsubscribe from
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - clientId
+              properties:
+                clientId:
+                  type: string
+                  description: WebSocket client ID
+      responses:
+        '200':
+          description: Successfully unsubscribed from channel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error' 

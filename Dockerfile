@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 
@@ -29,13 +29,8 @@ RUN npm ci --only=production
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
-# Create a default .env file if it doesn't exist
-RUN touch .env
-
-# Expose ports
-EXPOSE 3000
-EXPOSE 5555
-EXPOSE 5556
+# Expose ports for HTTP and WebSocket
+EXPOSE 3000 8080
 
 # Start the server
-CMD ["npm", "start"] 
+CMD ["node", "dist/index.js"] 

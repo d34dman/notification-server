@@ -27,8 +27,7 @@ jobs:
           touch .env
           echo "PORT=3000" >> .env
           echo "REDIS_URL=redis://redis:6379" >> .env
-          echo "ZEROMQ_PUB_PORT=5555" >> .env
-          echo "ZEROMQ_SUB_PORT=5556" >> .env
+          echo "WS_PORT=8080" >> .env
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3

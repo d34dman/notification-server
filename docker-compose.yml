@@ -7,12 +7,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-      - "5555:5555"
-      - "5556:5556"
+      - "8080:8080"
     environment:
+      - PORT=3000
+      - WS_PORT=8080
       - REDIS_URL=redis://redis:6379
-      - ZEROMQ_PUB_PORT=5555
-      - ZEROMQ_SUB_PORT=5556
+      - LOG_LEVEL=info
     depends_on:
       - redis
     networks:

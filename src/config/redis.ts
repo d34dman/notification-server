@@ -44,8 +44,13 @@ export class RedisManager {
    * Connect to Redis
    */
   public async connect(): Promise<void> {
-    // No need to explicitly connect with ioredis
-    return Promise.resolve();
+    try {
+      await this.client.ping();
+      console.log("Connected to Redis");
+    } catch (error) {
+      console.error("Redis connection error:", error);
+      throw error;
+    }
   }
 
   /**
@@ -54,21 +59,30 @@ export class RedisManager {
   public async storeNotification(channel: string, notification: string): Promise<void> {
     const key: RedisChannelKey = `notification:channel:${channel}`;
     await this.client.lpush(key, notification);
+    await this.client.ltrim(key, 0, 999); // Keep last 1000 notifications
   }
 
   /**
    * Store a client subscription
    */
   public async storeSubscription(clientId: string, channel: string): Promise<void> {
-    const key: RedisClientKey = `notification:client:${clientId}`;
+    const key: RedisClientKey = `subscription:client:${clientId}`;
     await this.client.sadd(key, channel);
+  }
+
+  /**
+   * Remove a client subscription
+   */
+  public async removeSubscription(clientId: string, channel: string): Promise<void> {
+    const key: RedisClientKey = `subscription:client:${clientId}`;
+    await this.client.srem(key, channel);
   }
 
   /**
    * Get all channels a client is subscribed to
    */
   public async getClientSubscriptions(clientId: string): Promise<string[]> {
-    const key: RedisClientKey = `notification:client:${clientId}`;
+    const key: RedisClientKey = `subscription:client:${clientId}`;
     return await this.client.smembers(key);
   }
 

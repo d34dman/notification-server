@@ -1,132 +1,260 @@
 # Notification Server
 
-A ZeroMQ-based notification server with Redis storage for managing pub/sub notifications.
+A real-time notification server with WebSocket support for instant message delivery and Redis for persistent storage.
 
 ## Features
 
-- Publish notifications to specific channels
-- Subscribe to channels for real-time notifications
-- Redis-based persistence for notifications
-- REST API endpoints for publishing and subscribing
-- ZeroMQ for efficient message distribution
+- **Real-time Notifications**: WebSocket-based delivery for instant notifications
+- **Channel-based Communication**: Organize notifications into channels
+- **Persistent Storage**: Redis-backed storage for notification history
+- **RESTful API**: HTTP endpoints for publishing and retrieving notifications
+- **Scalable Architecture**: Designed for high-throughput notification delivery
+- **Developer Tools**: Test client for easy development and testing
 
-## Prerequisites
+## Architecture
 
-- Node.js (v14 or higher)
+The notification server consists of:
+
+1. **HTTP Server**: RESTful API for publishing notifications and retrieving history
+2. **WebSocket Server**: Real-time notification delivery to subscribed clients
+3. **Redis Backend**: Persistent storage for notification data
+4. **Test Client**: Web-based tool for testing the server functionality
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18 or higher
 - Redis server
-- ZeroMQ library
 - Docker and Docker Compose (optional)
 
-## Installation
+### Installation
 
-### Local Development
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/notification-server.git
+   cd notification-server
+   ```
 
-1. Install dependencies:
-```bash
-npm install
+2. Install dependencies:
+   ```
+   npm install
+   ```
+
+3. Create a `.env` file based on `.env.example`:
+   ```
+   PORT=3000
+   REDIS_URL=redis://localhost:6379
+   WS_PORT=8080
+   ```
+
+### Running the Server
+
+#### Development Mode
+
+```
+npm run dev
 ```
 
-2. Configure environment variables:
-Copy `.env.example` to `.env` and adjust the values as needed.
+#### Production Mode
 
-3. Build the project:
-```bash
+```
 npm run build
+npm start
 ```
 
-### Docker Deployment
+#### Using Docker
 
-1. Build and start the containers:
-```bash
-docker-compose up --build
 ```
-
-2. To run in detached mode:
-```bash
+cd docker
 docker-compose up -d
 ```
 
-3. To stop the containers:
-```bash
-docker-compose down
+## API Reference
+
+### HTTP Endpoints
+
+#### Publish a Notification
+
+```
+POST /api/notifications
 ```
 
-## Usage
-
-1. Start the server:
-```bash
-# Local development
-npm start
-
-# Docker
-docker-compose up
-```
-
-2. API Endpoints:
-
-### Publish a Notification
-```bash
-POST /publish
-Content-Type: application/json
-
+Request body:
+```json
 {
-  "channel": "my-channel",
-  "content": "Hello, world!",
-  "metadata": {
-    "priority": "high"
+  "channel": "channel-name",
+  "message": "Your notification message"
+}
+```
+
+Response:
+```json
+{
+  "id": "notification-id",
+  "channel": "channel-name",
+  "message": "Your notification message",
+  "timestamp": 1234567890
+}
+```
+
+#### Get Notification History
+
+```
+GET /api/notifications/:channel?limit=10
+```
+
+Response:
+```json
+[
+  {
+    "id": "notification-id",
+    "channel": "channel-name",
+    "message": "Your notification message",
+    "timestamp": 1234567890
+  },
+  ...
+]
+```
+
+### WebSocket Protocol
+
+#### Connection
+
+Connect to the WebSocket server at `ws://localhost:8080`. Upon connection, you'll receive a client ID:
+
+```json
+{
+  "type": "connection",
+  "clientId": "client_1234567890"
+}
+```
+
+#### Subscribe to a Channel
+
+```json
+{
+  "type": "subscribe",
+  "channel": "channel-name"
+}
+```
+
+Response:
+```json
+{
+  "type": "subscribed",
+  "channel": "channel-name"
+}
+```
+
+#### Unsubscribe from a Channel
+
+```json
+{
+  "type": "unsubscribe",
+  "channel": "channel-name"
+}
+```
+
+Response:
+```json
+{
+  "type": "unsubscribed",
+  "channel": "channel-name"
+}
+```
+
+#### Receiving Notifications
+
+When a notification is published to a channel you're subscribed to, you'll receive:
+
+```json
+{
+  "type": "notification",
+  "channel": "channel-name",
+  "data": {
+    "id": "notification-id",
+    "channel": "channel-name",
+    "message": "Your notification message",
+    "timestamp": 1234567890
   }
 }
 ```
 
-### Subscribe to a Channel
-```bash
-POST /subscribe
-Content-Type: application/json
+## Test Client
 
-{
-  "channel": "my-channel",
-  "clientId": "client-123"
-}
+The notification server includes a built-in test client for easy development and testing.
+
+### Starting the Test Client
+
+```
+npm run test:client
 ```
 
-### Get Recent Notifications
-```bash
-GET /notifications/my-channel?count=10
-```
+Then open your browser to http://localhost:8081
+
+### Test Client Features
+
+- **WebSocket Connection**: Connect to the WebSocket server and manage subscriptions
+- **Notification Publishing**: Publish notifications to channels
+- **History Retrieval**: View notification history for channels
+- **Real-time Updates**: See notifications as they arrive
+- **Logging**: Detailed logs of all operations
+
+### Using the Test Client
+
+1. **Connect to WebSocket**:
+   - Enter the WebSocket URL (default: ws://localhost:8080)
+   - Click "Connect"
+   - You'll receive a client ID upon successful connection
+
+2. **Subscribe to Channels**:
+   - Enter a channel name
+   - Click "Subscribe"
+   - You'll receive a confirmation message
+
+3. **Publish Notifications**:
+   - Switch to the "Publish" tab
+   - Enter a channel name and message
+   - Click "Publish Notification"
+   - The notification will be sent to all subscribers
+
+4. **View Notification History**:
+   - Switch to the "History" tab
+   - Enter a channel name and limit
+   - Click "Get History"
+   - View the notifications in the history container
 
 ## Development
 
-Run the development server with hot reload:
-```bash
-npm run dev
+### Scripts
+
+- `npm run dev`: Start the server in development mode with hot reloading
+- `npm run build`: Build the TypeScript code
+- `npm start`: Start the server in production mode
+- `npm run lint`: Run ESLint
+- `npm run format`: Format code with Prettier
+- `npm run validate:openapi`: Validate OpenAPI specification
+- `npm run test:client`: Start the test client server
+
+### Project Structure
+
 ```
-
-## Architecture
-
-- Uses ZeroMQ PUB/SUB pattern for real-time message distribution
-- Redis for persistent storage of notifications and subscriptions
-- Express.js for REST API endpoints
-- TypeScript for type safety and better development experience
-
-## Error Handling
-
-The server includes comprehensive error handling for:
-- Invalid requests
-- Redis connection issues
-- ZeroMQ communication errors
-- Server startup failures
-
-## Docker Configuration
-
-The application is containerized using:
-- Multi-stage Docker build for optimized image size
-- Alpine-based Node.js image for security and size
-- Docker Compose for easy deployment with Redis
-- Volume mounting for Redis data persistence
-- Network isolation between services
-
-For detailed Docker examples and usage instructions, see the [Docker README](docker/README.md).
+notification-server/
+├── src/                  # Source code
+│   ├── index.ts          # Main server file
+│   ├── services/         # Service implementations
+│   ├── middleware/       # Express middleware
+│   └── utils/            # Utility functions
+├── docker/               # Docker configuration
+├── .github/              # GitHub configuration
+├── test-client.html      # Test client HTML
+├── serve-test-client.js  # Test client server
+├── package.json          # Project configuration
+├── tsconfig.json         # TypeScript configuration
+└── README.md             # This file
+```
 
 ## License
 
-MIT 
+ISC 

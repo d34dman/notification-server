@@ -4,9 +4,13 @@ services:
   notification-server:
     image: ghcr.io/d34dman/notification-server:main
     ports:
-      - "3000:3000"
+      - "3000:3000"  # HTTP API
+      - "8080:8080"  # WebSocket for real-time notifications
     environment:
       - REDIS_URL=redis://redis:6379
+      - WS_PORT=8080
+      - CORS_ORIGIN=*
+      - PORT=3000
     networks:
       - notification-network
     depends_on:

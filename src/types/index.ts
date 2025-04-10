@@ -7,11 +7,9 @@ export interface NotificationMessage {
   /** Channel to which the notification belongs */
   channel: string;
   /** The actual notification content */
-  content: string;
+  message: string;
   /** Timestamp when the notification was created */
   timestamp: number;
-  /** Optional metadata for the notification */
-  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -31,9 +29,7 @@ export interface PublishRequest {
   /** Channel to publish to */
   channel: string;
   /** Notification content */
-  content: string;
-  /** Optional metadata */
-  metadata?: Record<string, unknown>;
+  message: string;
 }
 
 /**
@@ -44,4 +40,12 @@ export type RedisChannelKey = `notification:channel:${string}`;
 /**
  * Type representing Redis client key format
  */
-export type RedisClientKey = `notification:client:${string}`;
+export type RedisClientKey = `notification:client:${string}` | `subscription:client:${string}`;
+
+export interface WebSocketMessage {
+  type: "subscribe" | "unsubscribe" | "notification" | "error" | "connection" | "subscribed" | "unsubscribed";
+  channel?: string;
+  clientId?: string;
+  message?: string;
+  data?: NotificationMessage;
+}
