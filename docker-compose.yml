@@ -14,13 +14,20 @@ services:
       - REDIS_URL=redis://redis:6379
       - LOG_LEVEL=info
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - notification-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
