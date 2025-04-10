@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: Notification Server API
+  description: |
+    A ZeroMQ-based notification server with Redis storage for managing pub/sub notifications.
+    This API allows clients to publish notifications to specific channels and subscribe to receive notifications.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: notifications
+    description: Operations related to notifications
+  - name: subscriptions
+    description: Operations related to channel subscriptions
+
+components:
+  schemas:
+    NotificationMessage:
+      type: object
+      required:
+        - id
+        - channel
+        - content
+        - timestamp
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the notification
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        channel:
+          type: string
+          description: Channel to which the notification belongs
+          example: "news"
+        content:
+          type: string
+          description: The actual notification content
+          example: "Breaking news: Important update"
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix timestamp when the notification was created
+          example: 1647123456789
+        metadata:
+          type: object
+          description: Optional metadata for the notification
+          additionalProperties: true
+          example:
+            priority: "high"
+            category: "alert"
+
+    PublishRequest:
+      type: object
+      required:
+        - channel
+        - content
+      properties:
+        channel:
+          type: string
+          description: Channel to publish to
+          example: "news"
+        content:
+          type: string
+          description: Notification content
+          example: "Breaking news: Important update"
+        metadata:
+          type: object
+          description: Optional metadata
+          additionalProperties: true
+          example:
+            priority: "high"
+            category: "alert"
+
+    PublishResponse:
+      type: object
+      required:
+        - success
+        - notificationId
+      properties:
+        success:
+          type: boolean
+          description: Whether the publish operation was successful
+          example: true
+        notificationId:
+          type: string
+          format: uuid
+          description: ID of the published notification
+          example: "123e4567-e89b-12d3-a456-426614174000"
+
+    SubscriptionRequest:
+      type: object
+      required:
+        - channel
+        - clientId
+      properties:
+        channel:
+          type: string
+          description: Channel to subscribe to
+          example: "news"
+        clientId:
+          type: string
+          description: Unique identifier for the client
+          example: "client-123"
+
+    SubscriptionResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          description: Whether the subscription was successful
+          example: true
+        message:
+          type: string
+          description: Success message
+          example: "Subscribed to channel: news"
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Channel and content are required"
+
+paths:
+  /publish:
+    post:
+      tags:
+        - notifications
+      summary: Publish a notification to a channel
+      description: Publishes a notification to a specific channel. The notification will be stored in Redis and distributed to all subscribers of that channel.
+      operationId: publishNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRequest"
+      responses:
+        "200":
+          description: Notification published successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /subscribe:
+    post:
+      tags:
+        - subscriptions
+      summary: Subscribe to a channel
+      description: Subscribes a client to a specific channel. The client will receive all future notifications published to that channel.
+      operationId: subscribeToChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionRequest"
+      responses:
+        "200":
+          description: Successfully subscribed to channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /notifications/{channel}:
+    get:
+      tags:
+        - notifications
+      summary: Get recent notifications for a channel
+      description: Retrieves recent notifications for a specific channel. The number of notifications returned can be controlled using the count query parameter.
+      operationId: getChannelNotifications
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Channel name
+          example: "news"
+        - name: count
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Number of notifications to retrieve
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - notifications
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotificationMessage"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error" 

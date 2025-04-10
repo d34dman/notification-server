@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  notification-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PORT=3000
+      - ZMQ_PUBLISHER_PORT=5555
+      - ZMQ_SUBSCRIBER_PORT=5556
+    depends_on:
+      - redis
+    networks:
+      - notification-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - notification-network
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  notification-network:
+    driver: bridge
+    internal: true
+
+volumes:
+  redis-data:
+    labels:
+      - "com.notification-server.volume=redis-data" 
