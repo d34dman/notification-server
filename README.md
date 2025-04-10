@@ -125,6 +125,8 @@ The application is containerized using:
 - Volume mounting for Redis data persistence
 - Network isolation between services
 
+For detailed Docker examples and usage instructions, see the [Docker README](docker/README.md).
+
 ## License
 
 MIT 

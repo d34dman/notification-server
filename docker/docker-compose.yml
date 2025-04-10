@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  notification-server:
+    image: ghcr.io/d34dman/notification-server:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - notification-network
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - notification-network
+
+networks:
+  notification-network:
+    driver: bridge 
