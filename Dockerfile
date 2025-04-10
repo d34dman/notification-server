@@ -29,8 +29,8 @@ RUN npm ci --only=production
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy environment file
-COPY .env.example ./.env
+# Create a default .env file if it doesn't exist
+RUN touch .env
 
 # Expose ports
 EXPOSE 3000
