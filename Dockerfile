@@ -1,10 +1,6 @@
 # Build stage
 FROM node:20-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++ zeromq-dev
-
-# Set working directory
 WORKDIR /app
 
 # Copy package files
@@ -16,16 +12,12 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
+# Build TypeScript
 RUN npm run build
 
 # Production stage
 FROM node:20-alpine
 
-# Install runtime dependencies
-RUN apk add --no-cache zeromq
-
-# Set working directory
 WORKDIR /app
 
 # Copy package files
@@ -34,21 +26,16 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
-# Copy built application from builder stage
+# Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
 # Copy environment file
-COPY .env.example .env
+COPY .env ./
 
-# Set build arguments
-ARG REDIS_PASSWORD
-ENV REDIS_PASSWORD=${REDIS_PASSWORD}
-
-# Expose the application port
+# Expose ports
 EXPOSE 3000
+EXPOSE 5555
+EXPOSE 5556
 
-# Set environment variables
-ENV NODE_ENV=production
-
-# Start the application
-CMD ["node", "dist/server.js"] 
+# Start the server
+CMD ["npm", "start"] 

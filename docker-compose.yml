@@ -7,11 +7,12 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+      - "5555:5555"
+      - "5556:5556"
     environment:
       - REDIS_URL=redis://redis:6379
-      - PORT=3000
-      - ZMQ_PUBLISHER_PORT=5555
-      - ZMQ_SUBSCRIBER_PORT=5556
+      - ZEROMQ_PUB_PORT=5555
+      - ZEROMQ_SUB_PORT=5556
     depends_on:
       - redis
     networks:
@@ -19,9 +20,9 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
-    expose:
-      - "6379"
+    image: redis:alpine
+    ports:
+      - "6379:6379"
     volumes:
       - redis-data:/data
     networks:

@@ -9,14 +9,9 @@ export class RedisManager {
   private client: Redis;
 
   private constructor() {
-    const redisUrl = new URL(process.env.REDIS_URL || "redis://localhost:6379");
+    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
-    // Add password to URL if provided
-    if (process.env.REDIS_PASSWORD) {
-      redisUrl.password = process.env.REDIS_PASSWORD;
-    }
-
-    this.client = new Redis(redisUrl.toString(), {
+    this.client = new Redis(redisUrl, {
       retryStrategy: (times: number) => {
         if (times > 10) {
           console.error("Redis connection failed after 10 retries");
