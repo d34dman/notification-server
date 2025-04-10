@@ -30,7 +30,7 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 
 # Copy environment file
-COPY .env ./
+COPY .env.example ./.env
 
 # Expose ports
 EXPOSE 3000
