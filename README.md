@@ -9,7 +9,7 @@ A real-time notification server with WebSocket support for instant message deliv
 - **Persistent Storage**: Redis-backed storage for notification history
 - **RESTful API**: HTTP endpoints for publishing and retrieving notifications
 - **Scalable Architecture**: Designed for high-throughput notification delivery
-- **Developer Tools**: Test client for easy development and testing
+- **Demo Client**: Web-based tool for testing and demonstration
 
 ## Architecture
 
@@ -18,7 +18,7 @@ The notification server consists of:
 1. **HTTP Server**: RESTful API for publishing notifications and retrieving history
 2. **WebSocket Server**: Real-time notification delivery to subscribed clients
 3. **Redis Backend**: Persistent storage for notification data
-4. **Test Client**: Web-based tool for testing the server functionality
+4. **Demo Client**: Web-based tool for testing and demonstrating server functionality
 
 ## Getting Started
 
@@ -65,9 +65,21 @@ npm start
 
 #### Using Docker
 
-```
+1. Build and start the containers:
+```bash
 cd docker
 docker-compose up -d
+```
+
+2. The services will be available at:
+   - Notification Server: http://localhost:3000
+   - WebSocket Server: ws://localhost:8080
+   - Redis: redis://localhost:6379
+   - Demo Client: http://localhost:8081
+
+3. To stop the services:
+```bash
+docker-compose down
 ```
 
 ## API Reference
@@ -181,19 +193,32 @@ When a notification is published to a channel you're subscribed to, you'll recei
 }
 ```
 
-## Test Client
+## Demo Client
 
-The notification server includes a built-in test client for easy development and testing.
+The notification server includes a built-in demo client for easy development and testing.
 
-### Starting the Test Client
+### Starting the Demo Client
 
+You can start the demo client in several ways:
+
+1. With the default port (8081):
+```bash
+npm run demo:client
 ```
-npm run test:client
+
+2. With a custom port using the short option:
+```bash
+npm run demo:client -- -p 3000
 ```
 
-Then open your browser to http://localhost:8081
+3. With a custom port using the long option:
+```bash
+npm run demo:client -- --port 3000
+```
 
-### Test Client Features
+Then open your browser to http://localhost:8081 (or your specified port)
+
+### Demo Client Features
 
 - **WebSocket Connection**: Connect to the WebSocket server and manage subscriptions
 - **Notification Publishing**: Publish notifications to channels
@@ -201,7 +226,7 @@ Then open your browser to http://localhost:8081
 - **Real-time Updates**: See notifications as they arrive
 - **Logging**: Detailed logs of all operations
 
-### Using the Test Client
+### Using the Demo Client
 
 1. **Connect to WebSocket**:
    - Enter the WebSocket URL (default: ws://localhost:8080)
@@ -216,12 +241,12 @@ Then open your browser to http://localhost:8081
 3. **Publish Notifications**:
    - Switch to the "Publish" tab
    - Enter a channel name and message
-   - Click "Publish Notification"
+   - Click "Publish"
    - The notification will be sent to all subscribers
 
 4. **View Notification History**:
    - Switch to the "History" tab
-   - Enter a channel name and limit
+   - Enter a channel name
    - Click "Get History"
    - View the notifications in the history container
 
@@ -234,8 +259,8 @@ Then open your browser to http://localhost:8081
 - `npm start`: Start the server in production mode
 - `npm run lint`: Run ESLint
 - `npm run format`: Format code with Prettier
-- `npm run validate:openapi`: Validate OpenAPI specification
-- `npm run test:client`: Start the test client server
+- `npm run demo:client`: Start the demo client server (default port: 8081)
+- `npm run demo:client -- -p <port>`: Start the demo client server on a custom port
 
 ### Project Structure
 
@@ -245,13 +270,23 @@ notification-server/
 │   ├── index.ts          # Main server file
 │   ├── services/         # Service implementations
 │   ├── middleware/       # Express middleware
-│   └── utils/            # Utility functions
+│   ├── utils/            # Utility functions
+│   ├── types/            # TypeScript type definitions
+│   └── config/           # Configuration files
+├── demo/                 # Demo client
+│   └── client/           # Demo client implementation
+│       ├── demo-client.html
+│       └── serve-demo-client.js
 ├── docker/               # Docker configuration
+│   ├── Dockerfile        # Server container definition
+│   └── docker-compose.yml # Multi-container setup
 ├── .github/              # GitHub configuration
-├── test-client.html      # Test client HTML
-├── serve-test-client.js  # Test client server
 ├── package.json          # Project configuration
 ├── tsconfig.json         # TypeScript configuration
+├── .eslintrc.json        # ESLint configuration
+├── .prettierrc           # Prettier configuration
+├── .editorconfig         # Editor configuration
+├── openapi.yaml          # OpenAPI specification
 └── README.md             # This file
 ```
 

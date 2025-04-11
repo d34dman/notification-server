@@ -9,8 +9,8 @@
     "build": "tsc",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "validate:openapi": "spectral lint openapi.yaml",
-    "test:client": "node test/client/serve-test-client.js"
+    "demo:client": "node demo/client/serve-demo-client.js",
+    "demo:client:port": "node demo/client/serve-demo-client.js --port"
   },
   "keywords": [
     "websocket",
@@ -35,9 +35,10 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
-    "@stoplight/spectral-cli": "^6.13.3",
+    "@types/commander": "^2.12.5",
     "@typescript-eslint/eslint-plugin": "^7.0.1",
     "@typescript-eslint/parser": "^7.0.1",
+    "commander": "^13.1.0",
     "eslint": "^8.56.0",
     "nodemon": "^3.0.3",
     "prettier": "^3.2.5",
