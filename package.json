@@ -1,5 +1,5 @@
 {
-  "name": "notification-server",
+  "name": "@d34dman/notification-server",
   "version": "1.0.0",
   "description": "A real-time notification server with WebSocket support",
   "main": "dist/index.js",
@@ -18,8 +18,8 @@
     "real-time",
     "redis"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "d34dman",
+  "license": "MIT",
   "dependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
