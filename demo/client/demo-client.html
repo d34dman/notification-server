@@ -92,30 +92,75 @@
     .tab-content.active {
       display: block;
     }
+
+    .subscription-status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+      background: #f8f8f8;
+    }
+
+    .subscription-status.true {
+      background: #e6ffe6;
+      color: #006600;
+    }
+
+    .subscription-status.false {
+      background: #ffe6e6;
+      color: #660000;
+    }
+
+    .channel-list {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f8f8f8;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .channel-item {
+      padding: 5px;
+      margin: 2px 0;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .channel-item:hover {
+      background: #e6e6e6;
+    }
+
+    .channel-item.selected {
+      background: #007bff;
+      color: white;
+    }
   </style>
 </head>
 <body>
-  <h1>Notification Server Test Client</h1>
+  <h1>Notification Server Demo Client</h1>
   
   <div class="container">
     <div class="panel">
-      <h2>WebSocket Connection</h2>
-      <div>
-        <label for="wsUrl">WebSocket URL:</label>
-        <input type="text" id="wsUrl" value="ws://localhost:8080">
-        <small style="display: block; color: #666; margin-top: 5px;">Note: WebSocket server runs on port 8080, HTTP API on port 3000</small>
-      </div>
+      <h2>Client Setup</h2>
       <div>
         <label for="apiUrl">HTTP API URL:</label>
-        <input type="text" id="apiUrl" value="http://localhost:3000">
+        <input type="text" id="apiUrl" value="">
         <small style="display: block; color: #666; margin-top: 5px;">Base URL for HTTP API endpoints</small>
       </div>
       <div>
-        <label for="clientId">Client ID:</label>
-        <input type="text" id="clientId" readonly>
+        <label for="wsUrl">WebSocket URL:</label>
+        <input type="text" id="wsUrl" value="">
+        <small style="display: block; color: #666; margin-top: 5px;">WebSocket server URL</small>
       </div>
       <div>
-        <button id="connectBtn">Connect</button>
+        <label for="clientId">Client ID:</label>
+        <input type="text" id="clientId" placeholder="Enter client ID or click Generate">
+        <small style="display: block; color: #666; margin-top: 5px;">Enter a custom ID or generate a new one</small>
+      </div>
+      <div>
+        <button id="generateClientBtn">Generate Client ID</button>
+        <button id="validateClientBtn">Validate Client ID</button>
+        <button id="connectBtn" disabled>Connect WebSocket</button>
         <button id="disconnectBtn" disabled>Disconnect</button>
       </div>
       <div id="wsStatus" class="status disconnected">Disconnected</div>
@@ -124,25 +169,71 @@
     
     <div class="panel">
       <h2>Channel Operations</h2>
-      <div>
-        <label for="channel">Channel:</label>
-        <input type="text" id="channel" value="test-channel" placeholder="Enter channel name">
-      </div>
-      <div>
-        <button id="subscribeBtn" disabled>Subscribe</button>
-        <button id="unsubscribeBtn" disabled>Unsubscribe</button>
-      </div>
       <div class="tabs">
-        <div class="tab active" data-tab="publish">Publish</div>
+        <div class="tab active" data-tab="channelManagement">Channel Management</div>
+        <div class="tab" data-tab="subscription">Subscription</div>
+        <div class="tab" data-tab="publish">Publish</div>
         <div class="tab" data-tab="history">History</div>
       </div>
-      <div class="tab-content active" id="publishTab">
+
+      <div class="tab-content active" id="channelManagementTab">
+        <div>
+          <h3>Create New Channel</h3>
+          <div>
+            <label for="newChannelName">Channel Name:</label>
+            <input type="text" id="newChannelName" placeholder="Enter channel name">
+          </div>
+          <div>
+            <label for="maxSubscribers">Max Subscribers:</label>
+            <input type="number" id="maxSubscribers" placeholder="Optional: max subscribers">
+          </div>
+          <button id="createChannelBtn">Create Channel</button>
+        </div>
+        <div>
+          <h3>Manage Channel Access</h3>
+          <div>
+            <label for="accessChannel">Channel:</label>
+            <input type="text" id="accessChannel" placeholder="Select or enter channel name">
+          </div>
+          <div>
+            <label for="targetClientId">Client ID:</label>
+            <input type="text" id="targetClientId" placeholder="Enter client ID">
+          </div>
+          <button id="grantAccessBtn">Grant Access</button>
+          <button id="revokeAccessBtn">Revoke Access</button>
+        </div>
+        <div class="log" id="channelManagementLog"></div>
+      </div>
+
+      <div class="tab-content" id="subscriptionTab">
+        <div>
+          <label for="channel">Channel:</label>
+          <input type="text" id="channel" placeholder="Select or enter channel name">
+          <div class="channel-list" id="channelList">
+            <div class="channel-item">Loading channels...</div>
+          </div>
+        </div>
+        <div>
+          <button id="wsSubscribeBtn" disabled>Subscribe</button>
+          <button id="wsUnsubscribeBtn" disabled>Unsubscribe</button>
+          <button id="checkSubscriptionBtn" disabled>Check Subscription</button>
+          <button id="refreshChannelsBtn">Refresh Channels</button>
+        </div>
+        <div id="subscriptionStatus" class="subscription-status">Subscription status: unknown</div>
+        <div>
+          <h3>Real-time Messages</h3>
+          <div class="log" id="realtimeMessages"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="publishTab">
         <div>
           <label for="message">Message:</label>
           <input type="text" id="message" value="Hello, this is a test message!" placeholder="Enter notification message">
         </div>
         <button id="publishBtn" disabled>Publish</button>
       </div>
+
       <div class="tab-content" id="historyTab">
         <button id="getHistoryBtn" disabled>Get History</button>
         <div class="log" id="historyLog"></div>
@@ -151,24 +242,60 @@
   </div>
   
   <script>
+    // Default configuration
+    const config = {
+      API_URL: 'http://localhost:3000',
+      WS_URL: 'ws://localhost:8080',
+      DEFAULT_CHANNEL: 'demo',
+      MAX_SUBSCRIBERS: '100',
+      CLIENT_METADATA: {
+        userAgent: 'Demo Client',
+        environment: 'development'
+      }
+    };
+
+    // Set default values from configuration
+    document.getElementById('apiUrl').value = config.API_URL;
+    document.getElementById('wsUrl').value = config.WS_URL;
+    document.getElementById('newChannelName').value = config.DEFAULT_CHANNEL;
+    document.getElementById('maxSubscribers').value = config.MAX_SUBSCRIBERS;
+    document.getElementById('channel').value = config.DEFAULT_CHANNEL;
+    document.getElementById('accessChannel').value = config.DEFAULT_CHANNEL;
+
     let ws = null;
     let clientId = null;
+    let accessibleChannels = [];
     
     // DOM Elements
     const wsUrlInput = document.getElementById('wsUrl');
     const apiUrlInput = document.getElementById('apiUrl');
     const clientIdInput = document.getElementById('clientId');
+    const generateClientBtn = document.getElementById('generateClientBtn');
+    const validateClientBtn = document.getElementById('validateClientBtn');
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
     const wsStatus = document.getElementById('wsStatus');
     const wsLog = document.getElementById('wsLog');
     const channelInput = document.getElementById('channel');
-    const subscribeBtn = document.getElementById('subscribeBtn');
-    const unsubscribeBtn = document.getElementById('unsubscribeBtn');
+    const channelList = document.getElementById('channelList');
+    const wsSubscribeBtn = document.getElementById('wsSubscribeBtn');
+    const wsUnsubscribeBtn = document.getElementById('wsUnsubscribeBtn');
+    const checkSubscriptionBtn = document.getElementById('checkSubscriptionBtn');
+    const refreshChannelsBtn = document.getElementById('refreshChannelsBtn');
+    const subscriptionStatus = document.getElementById('subscriptionStatus');
+    const realtimeMessages = document.getElementById('realtimeMessages');
     const messageInput = document.getElementById('message');
     const publishBtn = document.getElementById('publishBtn');
     const getHistoryBtn = document.getElementById('getHistoryBtn');
     const historyLog = document.getElementById('historyLog');
+    const newChannelNameInput = document.getElementById('newChannelName');
+    const maxSubscribersInput = document.getElementById('maxSubscribers');
+    const createChannelBtn = document.getElementById('createChannelBtn');
+    const accessChannelInput = document.getElementById('accessChannel');
+    const targetClientIdInput = document.getElementById('targetClientId');
+    const grantAccessBtn = document.getElementById('grantAccessBtn');
+    const revokeAccessBtn = document.getElementById('revokeAccessBtn');
+    const channelManagementLog = document.getElementById('channelManagementLog');
     
     // Tab handling
     document.querySelectorAll('.tab').forEach(tab => {
@@ -180,42 +307,162 @@
       });
     });
     
-    function log(message, type = 'info') {
+    function log(message, type = 'info', container = wsLog) {
       const entry = document.createElement('div');
       entry.textContent = `[${new Date().toISOString()}] ${message}`;
       entry.style.color = type === 'error' ? 'red' : 'inherit';
-      wsLog.appendChild(entry);
-      wsLog.scrollTop = wsLog.scrollHeight;
+      container.appendChild(entry);
+      container.scrollTop = container.scrollHeight;
     }
     
     function updateButtonStates() {
       const isConnected = ws && ws.readyState === WebSocket.OPEN;
-      connectBtn.disabled = isConnected;
+      generateClientBtn.disabled = isConnected;
+      connectBtn.disabled = !clientId || isConnected;
       disconnectBtn.disabled = !isConnected;
-      subscribeBtn.disabled = !isConnected;
-      unsubscribeBtn.disabled = !isConnected;
+      wsSubscribeBtn.disabled = !isConnected;
+      wsUnsubscribeBtn.disabled = !isConnected;
+      checkSubscriptionBtn.disabled = !isConnected;
       publishBtn.disabled = !isConnected;
       getHistoryBtn.disabled = !isConnected;
     }
-    
-    connectBtn.addEventListener('click', () => {
+
+    async function loadAccessibleChannels() {
+      if (!clientId) return;
+      
       try {
-        const url = wsUrlInput.value;
-        log(`Connecting to ${url}...`);
-        
-        // Clear any existing connection
-        if (ws) {
-          ws.close();
-          ws = null;
+        const response = await fetch(`${apiUrlInput.value}/api/clients/${clientId}/subscriptions`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        ws = new WebSocket(url);
+        const data = await response.json();
+        // The server returns an object with a subscriptions array
+        accessibleChannels = data.subscriptions || [];
+        
+        // Update channel list
+        channelList.innerHTML = '';
+        if (accessibleChannels && accessibleChannels.length > 0) {
+          accessibleChannels.forEach(channel => {
+            const item = document.createElement('div');
+            item.className = 'channel-item';
+            item.textContent = channel;
+            item.addEventListener('click', () => {
+              document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('selected'));
+              item.classList.add('selected');
+              channelInput.value = channel;
+              accessChannelInput.value = channel;
+            });
+            channelList.appendChild(item);
+          });
+        } else {
+          channelList.innerHTML = '<div class="channel-item">No accessible channels</div>';
+        }
+      } catch (error) {
+        log(`Error loading channels: ${error.message}`, 'error');
+        channelList.innerHTML = '<div class="channel-item" style="color: red;">Error loading channels</div>';
+      }
+    }
+    
+    async function checkSubscriptionStatus() {
+      if (!clientId || !channelInput.value.trim()) return;
+      
+      try {
+        const response = await fetch(
+          `${apiUrlInput.value}/api/clients/${clientId}/channels/${channelInput.value.trim()}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        subscriptionStatus.textContent = `Subscription status: ${data.isSubscribed ? 'subscribed' : 'not subscribed'}`;
+        subscriptionStatus.className = `subscription-status ${data.isSubscribed}`;
+      } catch (error) {
+        log(`Error checking subscription status: ${error.message}`, 'error');
+      }
+    }
+    
+    // Add validate client ID button event listener
+    validateClientBtn.addEventListener('click', async () => {
+      const currentClientId = clientIdInput.value.trim();
+      if (!currentClientId) {
+        log('Please enter a client ID', 'error');
+        return;
+      }
+
+      try {
+        // Validate the client ID with the server
+        const response = await fetch(`${apiUrlInput.value}/api/clients/${currentClientId}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        clientId = currentClientId;
+        log(`Using client ID: ${clientId}`);
+        
+        // Load accessible channels
+        await loadAccessibleChannels();
+        
+        // Enable connect button
+        connectBtn.disabled = false;
+      } catch (error) {
+        log(`Error validating client ID: ${error.message}`, 'error');
+      }
+    });
+
+    generateClientBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/clients`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            metadata: config.CLIENT_METADATA
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        clientId = data.clientId;
+        clientIdInput.value = clientId;
+        log(`Generated new client ID: ${clientId}`);
+        
+        // Load accessible channels
+        await loadAccessibleChannels();
+        
+        // Enable connect button
+        connectBtn.disabled = false;
+      } catch (error) {
+        log(`Error generating client ID: ${error.message}`, 'error');
+      }
+    });
+    
+    connectBtn.addEventListener('click', async () => {
+      try {
+        // Use the current client ID (either generated or custom)
+        const currentClientId = clientIdInput.value.trim();
+        if (!currentClientId) {
+          log('Please generate or enter a client ID first', 'error');
+          return;
+        }
+
+        ws = new WebSocket(`${wsUrlInput.value}?clientId=${currentClientId}`);
         
         ws.onopen = () => {
+          log('WebSocket connected');
           wsStatus.textContent = 'Connected';
           wsStatus.className = 'status connected';
-          updateButtonStates();
-          log('Connected to WebSocket server');
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          wsSubscribeBtn.disabled = false;
+          wsUnsubscribeBtn.disabled = false;
+          checkSubscriptionBtn.disabled = false;
+          publishBtn.disabled = false;
+          getHistoryBtn.disabled = false;
         };
         
         ws.onclose = (event) => {
@@ -223,12 +470,10 @@
           wsStatus.className = 'status disconnected';
           updateButtonStates();
           log(`Disconnected from WebSocket server${event.reason ? `: ${event.reason}` : ''} (code: ${event.code})`, 'error');
-          if (event.code === 1006) {
-            log('Connection closed abnormally. This might indicate a server issue or network problem.', 'error');
+          if (event.code === 4001) {
+            log('Invalid client ID. Please generate a new one.', 'error');
           }
           ws = null;
-          clientId = null;
-          clientIdInput.value = '';
         };
         
         ws.onerror = (error) => {
@@ -243,21 +488,57 @@
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.type === 'connection') {
-              clientId = data.clientId;
-              clientIdInput.value = clientId;
-              log(`Received client ID: ${clientId}`);
-            } else if (data.type === 'notification') {
-              log(`Received notification: ${JSON.stringify(data.data)}`);
+            console.log('Received WebSocket message:', data); // Debug log
+            
+            if (data.type === 'notification') {
+              const message = data.data;
+              // Log to WebSocket log
+              log(`Received notification: ${JSON.stringify(message)}`);
+              
+              // Display in real-time messages section with timestamp and channel
+              const entry = document.createElement('div');
+              entry.innerHTML = `
+                <div style="color: #666; font-size: 0.8em;">${new Date().toISOString()}</div>
+                <div style="color: #007bff;">Channel: ${message.channel || 'unknown'}</div>
+                <div>${message.message || message.content || JSON.stringify(message)}</div>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 5px 0;">
+              `;
+              realtimeMessages.appendChild(entry);
+              realtimeMessages.scrollTop = realtimeMessages.scrollHeight;
             } else if (data.type === 'error') {
               log(data.message, 'error');
+            } else if (data.type === 'subscription') {
+              // Handle subscription responses
+              console.log('Subscription response:', data);
+              const action = data.action;
+              const success = action === 'subscribed' || action === 'unsubscribed';
+              log(`Subscription ${action} ${success ? 'succeeded' : 'failed'}: ${data.message || ''}`);
+              if (success) {
+                checkSubscriptionStatus();
+                loadAccessibleChannels();
+              }
+            } else if (data.type === 'connection') {
+              // Handle connection message
+              console.log('Connection message:', data);
+              if (data.clientId) {
+                clientId = data.clientId;
+                clientIdInput.value = clientId;
+                log(`Connected with client ID: ${clientId}`);
+              }
+            } else {
+              // Handle any other message type
+              console.log('Unknown message type:', data);
+              log(`Received message: ${JSON.stringify(data)}`);
             }
           } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
             log(`Error parsing message: ${error.message}`, 'error');
+            // Log the raw message for debugging
+            log(`Raw message: ${event.data}`, 'error');
           }
         };
       } catch (error) {
-        log(`Connection error: ${error.message}`, 'error');
+        log(`Error connecting: ${error.message}`, 'error');
       }
     });
     
@@ -267,55 +548,161 @@
       }
     });
     
-    subscribeBtn.addEventListener('click', async () => {
+    wsSubscribeBtn.addEventListener('click', () => {
       const channel = channelInput.value.trim();
       if (!channel) {
         log('Please enter a channel name', 'error');
         return;
       }
       
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('WebSocket is not connected', 'error');
+        return;
+      }
+      
       try {
-        const response = await fetch(`${apiUrlInput.value}/api/channels/${channel}/subscribe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        log(`Subscribed to channel: ${channel}`);
+        const message = {
+          type: 'subscription',
+          action: 'subscribe',
+          channel: channel
+        };
+        console.log('Sending WebSocket subscribe message:', message);
+        ws.send(JSON.stringify(message));
+        log(`Sent WebSocket subscribe request for channel: ${channel}`);
       } catch (error) {
-        log(`Subscription error: ${error.message}`, 'error');
+        log(`Error sending subscribe message: ${error.message}`, 'error');
       }
     });
     
-    unsubscribeBtn.addEventListener('click', async () => {
+    wsUnsubscribeBtn.addEventListener('click', () => {
       const channel = channelInput.value.trim();
       if (!channel) {
         log('Please enter a channel name', 'error');
         return;
       }
       
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('WebSocket is not connected', 'error');
+        return;
+      }
+      
       try {
-        const response = await fetch(`${apiUrlInput.value}/api/channels/${channel}/unsubscribe`, {
+        const message = {
+          type: 'subscription',
+          action: 'unsubscribe',
+          channel: channel
+        };
+        console.log('Sending WebSocket unsubscribe message:', message);
+        ws.send(JSON.stringify(message));
+        log(`Sent WebSocket unsubscribe request for channel: ${channel}`);
+      } catch (error) {
+        log(`Error sending unsubscribe message: ${error.message}`, 'error');
+      }
+    });
+
+    // Channel Management Functions
+    createChannelBtn.addEventListener('click', async () => {
+      const channelName = newChannelNameInput.value.trim();
+      if (!channelName) {
+        log('Please enter a channel name', 'error', channelManagementLog);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/channels`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId })
+          body: JSON.stringify({
+            channel: channelName,
+            rules: {
+              maxSubscribers: maxSubscribersInput.value ? parseInt(maxSubscribersInput.value) : undefined
+            }
+          })
         });
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        log(`Unsubscribed from channel: ${channel}`);
+        log(`Channel created: ${channelName}`, 'info', channelManagementLog);
+        newChannelNameInput.value = '';
+        maxSubscribersInput.value = '';
+        
+        // Refresh accessible channels list
+        await loadAccessibleChannels();
       } catch (error) {
-        log(`Unsubscription error: ${error.message}`, 'error');
+        log(`Error creating channel: ${error.message}`, 'error', channelManagementLog);
       }
     });
+
+    grantAccessBtn.addEventListener('click', async () => {
+      const channel = accessChannelInput.value.trim();
+      const targetClientId = targetClientIdInput.value.trim();
+      
+      if (!channel || !targetClientId) {
+        log('Please enter both channel name and client ID', 'error', channelManagementLog);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/channels/${channel}/access/${targetClientId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        log(`Access granted for client ${targetClientId} to channel ${channel}`, 'info', channelManagementLog);
+        targetClientIdInput.value = '';
+        
+        // If the access was granted to the current client, reload accessible channels
+        if (targetClientId === clientId) {
+          await loadAccessibleChannels();
+        }
+      } catch (error) {
+        log(`Error granting access: ${error.message}`, 'error', channelManagementLog);
+      }
+    });
+
+    revokeAccessBtn.addEventListener('click', async () => {
+      const channel = accessChannelInput.value.trim();
+      const targetClientId = targetClientIdInput.value.trim();
+      
+      if (!channel || !targetClientId) {
+        log('Please enter both channel name and client ID', 'error', channelManagementLog);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${apiUrlInput.value}/api/channels/${channel}/access/${targetClientId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        log(`Access revoked for client ${targetClientId} from channel ${channel}`, 'info', channelManagementLog);
+        targetClientIdInput.value = '';
+      } catch (error) {
+        log(`Error revoking access: ${error.message}`, 'error', channelManagementLog);
+      }
+    });
+
+    // Add refresh button event listener
+    refreshChannelsBtn.addEventListener('click', async () => {
+      if (!clientId) {
+        log('Please generate a client ID first', 'error');
+        return;
+      }
+      await loadAccessibleChannels();
+    });
+
+    checkSubscriptionBtn.addEventListener('click', checkSubscriptionStatus);
     
     publishBtn.addEventListener('click', async () => {
       const channel = channelInput.value.trim();
@@ -371,4 +758,4 @@
     });
   </script>
 </body>
-</html> 
+</html>

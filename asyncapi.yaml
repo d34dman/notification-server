@@ -1,0 +1,197 @@
+asyncapi: 2.6.0
+info:
+  title: Notification Server WebSocket API
+  description: |
+    WebSocket API for real-time notifications.
+    This API handles WebSocket connections and real-time message delivery.
+  version: 1.0.0
+  contact:
+    email: support@example.com
+
+servers:
+  development:
+    url: ws://localhost:8080
+    protocol: ws
+    description: Development WebSocket server
+
+channels:
+  /:
+    description: Root WebSocket connection endpoint
+    subscribe:
+      operationId: handleWebSocketConnection
+      message:
+        oneOf:
+          - $ref: '#/components/messages/ConnectionMessage'
+          - $ref: '#/components/messages/SubscriptionMessage'
+          - $ref: '#/components/messages/NotificationMessage'
+          - $ref: '#/components/messages/ErrorMessage'
+          - $ref: '#/components/messages/AccessControlMessage'
+
+components:
+  messages:
+    ConnectionMessage:
+      name: ConnectionMessage
+      title: WebSocket Connection Message
+      summary: Initial connection message with client ID
+      payload:
+        type: object
+        required:
+          - type
+          - clientId
+        properties:
+          type:
+            type: string
+            enum: [connection]
+            description: Message type identifier
+          clientId:
+            type: string
+            description: Unique client identifier
+          metadata:
+            type: object
+            description: Additional client metadata
+            properties:
+              userAgent:
+                type: string
+                description: Client user agent
+              environment:
+                type: string
+                description: Client environment
+
+    SubscriptionMessage:
+      name: SubscriptionMessage
+      title: Subscription Management Message
+      summary: Message for managing channel subscriptions
+      payload:
+        type: object
+        required:
+          - type
+          - action
+          - channel
+        properties:
+          type:
+            type: string
+            enum: [subscription]
+            description: Message type identifier
+          action:
+            type: string
+            enum: [subscribe, unsubscribe]
+            description: Subscription action to perform
+          channel:
+            type: string
+            description: Channel name to subscribe/unsubscribe from
+          result:
+            type: boolean
+            description: Result of the subscription action
+          message:
+            type: string
+            description: Additional information about the result
+
+    NotificationMessage:
+      name: NotificationMessage
+      title: Notification Message
+      summary: Real-time notification message
+      payload:
+        type: object
+        required:
+          - type
+          - data
+        properties:
+          type:
+            type: string
+            enum: [notification]
+            description: Message type identifier
+          data:
+            $ref: '#/components/schemas/Notification'
+
+    ErrorMessage:
+      name: ErrorMessage
+      title: Error Message
+      summary: Error response message
+      payload:
+        type: object
+        required:
+          - type
+          - message
+        properties:
+          type:
+            type: string
+            enum: [error]
+            description: Message type identifier
+          message:
+            type: string
+            description: Error message
+          code:
+            type: integer
+            description: Error code
+          details:
+            type: object
+            description: Additional error details
+
+    AccessControlMessage:
+      name: AccessControlMessage
+      title: Access Control Message
+      summary: Message for managing channel access
+      payload:
+        type: object
+        required:
+          - type
+          - action
+          - channel
+          - clientId
+        properties:
+          type:
+            type: string
+            enum: [access]
+            description: Message type identifier
+          action:
+            type: string
+            enum: [grant, revoke]
+            description: Access control action
+          channel:
+            type: string
+            description: Channel name
+          clientId:
+            type: string
+            description: Target client ID
+          result:
+            type: boolean
+            description: Result of the access control action
+          message:
+            type: string
+            description: Additional information about the result
+
+  schemas:
+    Notification:
+      type: object
+      required:
+        - channel
+        - message
+      properties:
+        channel:
+          type: string
+          description: Channel name
+        message:
+          type: string
+          description: Notification message content
+        timestamp:
+          type: string
+          format: date-time
+          description: Message timestamp
+        metadata:
+          type: object
+          description: Additional message metadata
+          properties:
+            priority:
+              type: string
+              enum: [low, medium, high]
+              description: Message priority
+            tags:
+              type: array
+              items:
+                type: string
+              description: Message tags
+
+  securitySchemes:
+    none:
+      type: none
+      description: No security required for WebSocket connections 

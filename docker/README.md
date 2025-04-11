@@ -14,11 +14,6 @@ docker-compose up -d
 2. Test the notification server:
 
 ```bash
-# Subscribe to a channel
-curl -X POST http://localhost:3000/subscribe \
-  -H "Content-Type: application/json" \
-  -d '{"channel": "news", "clientId": "client1"}'
-
 # Publish a notification
 curl -X POST http://localhost:3000/publish \
   -H "Content-Type: application/json" \

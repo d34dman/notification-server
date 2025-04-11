@@ -1,13 +1,15 @@
 openapi: 3.0.0
 info:
-  title: Notification Server API
-  description: API for managing real-time notifications and WebSocket connections
+  title: Notification Server HTTP API
+  description: |
+    HTTP API for managing notifications, channels, and client access.
+    This API handles client management, channel creation, and access control.
   version: 1.0.0
   contact:
     email: support@example.com
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:3000
     description: Development server
 
 components:
@@ -15,41 +17,159 @@ components:
     Notification:
       type: object
       required:
-        - id
         - channel
         - message
-        - timestamp
       properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for the notification
         channel:
           type: string
-          description: Channel name the notification belongs to
+          description: Channel name
         message:
           type: string
           description: Notification message content
         timestamp:
-          type: integer
-          format: int64
-          description: Unix timestamp in milliseconds
+          type: string
+          format: date-time
+          description: Message timestamp
+        metadata:
+          type: object
+          description: Additional message metadata
+          properties:
+            priority:
+              type: string
+              enum: [low, medium, high]
+              description: Message priority
+            tags:
+              type: array
+              items:
+                type: string
+              description: Message tags
 
     Error:
       type: object
       required:
-        - error
+        - message
       properties:
-        error:
+        message:
           type: string
           description: Error message
+        code:
+          type: integer
+          description: Error code
+        details:
+          type: object
+          description: Additional error details
+
+    SubscriptionStatus:
+      type: object
+      required:
+        - isSubscribed
+      properties:
+        isSubscribed:
+          type: boolean
+          description: Whether the client is subscribed to the channel
+
+    ClientSubscriptions:
+      type: object
+      required:
+        - subscriptions
+      properties:
+        subscriptions:
+          type: array
+          items:
+            type: string
+          description: List of channel names the client is subscribed to
+
+    ChannelSubscribers:
+      type: object
+      required:
+        - subscribers
+      properties:
+        subscribers:
+          type: array
+          items:
+            type: string
+          description: List of client IDs subscribed to the channel
 
 paths:
-  /api/notifications:
+  /api/clients:
     post:
-      summary: Publish a new notification
-      description: Creates and broadcasts a new notification to a channel
-      operationId: publishNotification
+      summary: Generate a new client ID
+      description: Creates a new client ID with optional metadata
+      operationId: generateClientId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metadata:
+                  type: object
+                  description: Client metadata
+                  properties:
+                    userAgent:
+                      type: string
+                      description: Client user agent
+                    environment:
+                      type: string
+                      description: Client environment
+      responses:
+        '200':
+          description: Client ID generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - clientId
+                properties:
+                  clientId:
+                    type: string
+                    description: Generated client ID
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/clients/{clientId}:
+    get:
+      summary: Validate client ID
+      description: Checks if a client ID is valid
+      operationId: validateClientId
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID to validate
+      responses:
+        '200':
+          description: Client ID is valid
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - valid
+                properties:
+                  valid:
+                    type: boolean
+                    description: Whether the client ID is valid
+        '404':
+          description: Client ID not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/channels:
+    post:
+      summary: Create a new channel
+      description: Creates a new channel with access control rules
+      operationId: createChannel
       requestBody:
         required: true
         content:
@@ -58,29 +178,200 @@ paths:
               type: object
               required:
                 - channel
-                - message
               properties:
                 channel:
                   type: string
-                  description: Channel to publish the notification to
-                message:
-                  type: string
-                  description: Notification message content
+                  description: Channel name
+                rules:
+                  type: object
+                  description: Channel access rules
+                  properties:
+                    maxSubscribers:
+                      type: integer
+                      description: Maximum number of subscribers allowed
+                    allowedClients:
+                      type: array
+                      items:
+                        type: string
+                      description: List of client IDs allowed to access the channel
+                    allowedPatterns:
+                      type: array
+                      items:
+                        type: string
+                      description: List of client ID patterns allowed to access the channel
       responses:
-        '201':
-          description: Notification published successfully
+        '200':
+          description: Channel created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Notification'
+                type: object
+                required:
+                  - channel
+                properties:
+                  channel:
+                    type: string
+                    description: Created channel name
         '400':
           description: Invalid request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '500':
-          description: Server error
+
+  /api/channels/{channel}/access/{clientId}:
+    post:
+      summary: Grant channel access
+      description: Grants a client access to a channel
+      operationId: grantChannelAccess
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Channel name
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID to grant access to
+      responses:
+        '200':
+          description: Access granted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether access was granted
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Channel or client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Revoke channel access
+      description: Revokes a client's access to a channel
+      operationId: revokeChannelAccess
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Channel name
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID to revoke access from
+      responses:
+        '200':
+          description: Access revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether access was revoked
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Channel or client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/clients/{clientId}/channels:
+    get:
+      summary: Get accessible channels
+      description: Retrieves all channels a client has access to
+      operationId: getClientChannels
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID
+      responses:
+        '200':
+          description: List of accessible channels
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - channels
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: string
+                    description: List of channel names
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/notifications:
+    post:
+      summary: Publish notification
+      description: Publishes a notification to a channel
+      operationId: publishNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notification'
+      responses:
+        '200':
+          description: Notification published successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether notification was published
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Channel not found
           content:
             application/json:
               schema:
@@ -89,8 +380,8 @@ paths:
   /api/notifications/{channel}:
     get:
       summary: Get notification history
-      description: Retrieves recent notifications for a specific channel
-      operationId: getNotifications
+      description: Retrieves notification history for a channel
+      operationId: getNotificationHistory
       parameters:
         - name: channel
           in: path
@@ -98,15 +389,6 @@ paths:
           schema:
             type: string
           description: Channel name
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 10
-            minimum: 1
-            maximum: 100
-          description: Maximum number of notifications to return
       responses:
         '200':
           description: List of notifications
@@ -116,90 +398,110 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Notification'
-        '500':
-          description: Server error
+        '404':
+          description: Channel not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/channels/{channel}/subscribe:
-    post:
-      summary: Subscribe to a channel
-      description: Subscribe a client to receive notifications from a channel
-      operationId: subscribeToChannel
+  /api/clients/{clientId}/channels/{channel}:
+    get:
+      summary: Check subscription status
+      description: Check if a client is subscribed to a specific channel
+      operationId: checkSubscriptionStatus
       parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID to check
         - name: channel
           in: path
           required: true
           schema:
             type: string
-          description: Channel name to subscribe to
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - clientId
-              properties:
-                clientId:
-                  type: string
-                  description: WebSocket client ID
+          description: Channel name to check
       responses:
         '200':
-          description: Successfully subscribed to channel
+          description: Subscription status
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: '#/components/schemas/SubscriptionStatus'
         '400':
           description: Invalid request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: Client or channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  /api/channels/{channel}/unsubscribe:
-    post:
-      summary: Unsubscribe from a channel
-      description: Unsubscribe a client from receiving notifications from a channel
-      operationId: unsubscribeFromChannel
+  /api/clients/{clientId}/subscriptions:
+    get:
+      summary: Get client subscriptions
+      description: Get all channels a client is subscribed to
+      operationId: getClientSubscriptions
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID to get subscriptions for
+      responses:
+        '200':
+          description: List of subscribed channels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientSubscriptions'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/channels/{channel}/subscribers:
+    get:
+      summary: Get channel subscribers
+      description: Get all clients subscribed to a channel
+      operationId: getChannelSubscribers
       parameters:
         - name: channel
           in: path
           required: true
           schema:
             type: string
-          description: Channel name to unsubscribe from
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - clientId
-              properties:
-                clientId:
-                  type: string
-                  description: WebSocket client ID
+          description: Channel name to get subscribers for
       responses:
         '200':
-          description: Successfully unsubscribed from channel
+          description: List of subscribed clients
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+                $ref: '#/components/schemas/ChannelSubscribers'
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Channel not found
           content:
             application/json:
               schema:
