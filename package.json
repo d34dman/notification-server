@@ -10,7 +10,7 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "validate:openapi": "spectral lint openapi.yaml",
-    "test:client": "node serve-test-client.js"
+    "test:client": "node test/client/serve-test-client.js"
   },
   "keywords": [
     "websocket",
