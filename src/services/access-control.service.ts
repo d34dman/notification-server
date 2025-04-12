@@ -16,22 +16,21 @@ export class AccessControlService {
   /**
    * Generates a new client ID and stores it in Redis
    * @param metadata Optional metadata to store with the client ID
-   * @returns Generated client ID
+   * @param clientId Optional client ID to use instead of generating a new one
+   * @returns The generated or provided client ID
    */
-  public async generateClientId(metadata?: Record<string, unknown>): Promise<string> {
-    const clientId = `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  async generateClientId(metadata: Record<string, any> = {}, clientId?: string): Promise<string> {
+    const id = clientId || `client.${Date.now()}.${crypto.randomUUID()}`;
+    const key = `client:${id}`;
     
-    // Store client metadata in Redis with expiration
-    await this.redis.hset(`client:${clientId}`, {
-      createdAt: Date.now().toString(),
-      ...metadata
-    });
+    await this.redis.set(key, JSON.stringify({
+      id,
+      metadata,
+      createdAt: new Date().toISOString()
+    }), 'EX', this.clientIdExpiration);
     
-    // Set expiration
-    await this.redis.expire(`client:${clientId}`, this.clientIdExpiration);
-    
-    logger.info(`Generated new client ID: ${clientId}`);
-    return clientId;
+    logger.info(`Generated new client ID: ${id}`);
+    return id;
   }
 
   /**

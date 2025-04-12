@@ -301,8 +301,8 @@ app.post("/api/clients", async (req, res) => {
       }
     }
     
-    // Generate new client ID if none provided or invalid
-    const newClientId = await accessControl.generateClientId(metadata);
+    // Generate new client ID using provided clientId or generate a new one
+    const newClientId = await accessControl.generateClientId(metadata, clientId);
     res.status(201).json({ 
       clientId: newClientId,
       message: 'New client ID generated'
