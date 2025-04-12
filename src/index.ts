@@ -358,6 +358,15 @@ app.post("/api/channels", async (req, res) => {
       return res.status(400).json({ error: "Channel name is required" });
     }
 
+    // Check if channel exists
+    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    if (exists) {
+      return res.status(409).json({ 
+        error: "Channel already exists",
+        message: `Channel '${channel}' already exists`
+      });
+    }
+
     await accessControl.createChannel(channel, rules || {});
     res.status(201).json({ channel, rules });
   } catch (error) {
@@ -465,6 +474,44 @@ app.post("/api/test/private-channel", async (req, res) => {
   } catch (error) {
     logger.error("Error creating private channel:", error);
     res.status(500).json({ error: "Failed to create private channel" });
+  }
+});
+
+// Delete channel endpoint
+app.delete("/api/channels/:channel", async (req, res) => {
+  try {
+    const { channel } = req.params;
+    
+    if (!channel) {
+      return res.status(400).json({ error: "Channel name is required" });
+    }
+
+    // Check if channel exists
+    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    if (!exists) {
+      return res.status(404).json({ 
+        error: "Channel not found",
+        message: `Channel '${channel}' does not exist`
+      });
+    }
+
+    // Delete channel rules
+    await redisClient.del(`channel:${channel}:rules`);
+    
+    // Delete all subscriptions for this channel
+    const subscribers = await redisClient.smembers(`channel:${channel}:subscribers`);
+    for (const clientId of subscribers) {
+      await redisClient.srem(`client:${clientId}:channels`, channel);
+    }
+    await redisClient.del(`channel:${channel}:subscribers`);
+
+    res.status(200).json({ 
+      message: `Channel '${channel}' deleted successfully`,
+      channel
+    });
+  } catch (error) {
+    logger.error(`Error deleting channel: ${error}`);
+    res.status(500).json({ error: "Failed to delete channel" });
   }
 });
 

@@ -220,4 +220,30 @@ npm run build
 
 ## License
 
-MIT License - see LICENSE file for details 
+MIT License - see LICENSE file for details
+
+## Channel Management
+
+### Create Channel
+```bash
+curl -X POST http://localhost:3000/api/channels \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel": "my-channel",
+    "rules": {
+      "isPublic": true,
+      "allowedClientIds": ["client1", "client2"],
+      "maxSubscribers": 100
+    }
+  }'
+```
+
+### Delete Channel
+```bash
+curl -X DELETE http://localhost:3000/api/channels/my-channel
+```
+
+### Error Handling
+- Channel creation will fail with a 409 status if the channel already exists
+- Channel deletion will fail with a 404 status if the channel doesn't exist
+- Both operations require a valid channel name 

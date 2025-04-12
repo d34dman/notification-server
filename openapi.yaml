@@ -205,8 +205,9 @@ paths:
   /api/channels:
     post:
       summary: Create a new channel
-      description: Creates a new channel with access control rules
-      operationId: createChannel
+      description: Creates a new channel with specified rules. Returns 409 if channel already exists.
+      tags:
+        - Channel Management
       requestBody:
         required: true
         content:
@@ -218,24 +219,22 @@ paths:
               properties:
                 channel:
                   type: string
-                  description: Channel name
+                  description: Name of the channel to create
                 rules:
                   type: object
                   description: Channel access rules
                   properties:
+                    isPublic:
+                      type: boolean
+                      description: Whether the channel is public
+                    allowedClientIds:
+                      type: array
+                      items:
+                        type: string
+                      description: List of allowed client IDs
                     maxSubscribers:
                       type: integer
                       description: Maximum number of subscribers allowed
-                    allowedClients:
-                      type: array
-                      items:
-                        type: string
-                      description: List of client IDs allowed to access the channel
-                    allowedPatterns:
-                      type: array
-                      items:
-                        type: string
-                      description: List of client ID patterns allowed to access the channel
       responses:
         '201':
           description: Channel created successfully
@@ -243,14 +242,77 @@ paths:
             application/json:
               schema:
                 type: object
-                required:
-                  - channel
                 properties:
                   channel:
                     type: string
-                    description: Created channel name
+                  rules:
+                    type: object
         '400':
-          description: Invalid request
+          description: Bad request - channel name is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Channel already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete a channel
+      description: Deletes an existing channel and all its subscriptions
+      tags:
+        - Channel Management
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Name of the channel to delete
+      responses:
+        '200':
+          description: Channel deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  channel:
+                    type: string
+        '400':
+          description: Bad request - channel name is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  message:
+                    type: string
+        '500':
+          description: Server error
           content:
             application/json:
               schema:
