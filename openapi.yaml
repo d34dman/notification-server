@@ -90,12 +90,28 @@ components:
             type: string
           description: List of client IDs subscribed to the channel
 
+    ClientMetadata:
+      type: object
+      properties:
+        userAgent:
+          type: string
+          description: Client user agent
+        environment:
+          type: string
+          description: Client environment
+        custom:
+          type: object
+          description: Custom metadata fields
+
 paths:
   /api/clients:
     post:
-      summary: Generate a new client ID
-      description: Creates a new client ID with optional metadata
-      operationId: generateClientId
+      summary: Generate or validate a client ID
+      description: |
+        Generates a new client ID or validates an existing one.
+        If a clientId is provided in the request, it will be validated.
+        If no clientId is provided or it's invalid, a new one will be generated.
+      operationId: generateOrValidateClientId
       requestBody:
         required: true
         content:
@@ -103,31 +119,52 @@ paths:
             schema:
               type: object
               properties:
+                clientId:
+                  type: string
+                  description: Optional client ID to validate
                 metadata:
-                  type: object
-                  description: Client metadata
-                  properties:
-                    userAgent:
-                      type: string
-                      description: Client user agent
-                    environment:
-                      type: string
-                      description: Client environment
+                  $ref: '#/components/schemas/ClientMetadata'
       responses:
         '200':
-          description: Client ID generated successfully
+          description: Client ID is valid
           content:
             application/json:
               schema:
                 type: object
                 required:
                   - clientId
+                  - message
+                properties:
+                  clientId:
+                    type: string
+                    description: Validated client ID
+                  message:
+                    type: string
+                    description: Status message
+        '201':
+          description: New client ID generated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - clientId
+                  - message
                 properties:
                   clientId:
                     type: string
                     description: Generated client ID
+                  message:
+                    type: string
+                    description: Status message
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
           content:
             application/json:
               schema:
@@ -200,7 +237,7 @@ paths:
                         type: string
                       description: List of client ID patterns allowed to access the channel
       responses:
-        '200':
+        '201':
           description: Channel created successfully
           content:
             application/json:
@@ -342,7 +379,7 @@ paths:
 
   /api/notifications:
     post:
-      summary: Publish notification
+      summary: Publish a notification
       description: Publishes a notification to a channel
       operationId: publishNotification
       requestBody:
@@ -350,20 +387,27 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Notification'
+              type: object
+              required:
+                - channel
+                - message
+              properties:
+                channel:
+                  type: string
+                  description: Channel to publish to
+                message:
+                  type: string
+                  description: Notification message
+                metadata:
+                  type: object
+                  description: Additional message metadata
       responses:
         '200':
           description: Notification published successfully
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - success
-                properties:
-                  success:
-                    type: boolean
-                    description: Whether notification was published
+                $ref: '#/components/schemas/Notification'
         '400':
           description: Invalid request
           content:
@@ -380,7 +424,7 @@ paths:
   /api/notifications/{channel}:
     get:
       summary: Get notification history
-      description: Retrieves notification history for a channel
+      description: Retrieves the notification history for a channel
       operationId: getNotificationHistory
       parameters:
         - name: channel
@@ -389,9 +433,15 @@ paths:
           schema:
             type: string
           description: Channel name
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Maximum number of notifications to return
       responses:
         '200':
-          description: List of notifications
+          description: Notification history retrieved successfully
           content:
             application/json:
               schema:
@@ -446,7 +496,7 @@ paths:
   /api/clients/{clientId}/subscriptions:
     get:
       summary: Get client subscriptions
-      description: Get all channels a client is subscribed to
+      description: Retrieves all channels a client is subscribed to
       operationId: getClientSubscriptions
       parameters:
         - name: clientId
@@ -454,20 +504,14 @@ paths:
           required: true
           schema:
             type: string
-          description: Client ID to get subscriptions for
+          description: Client ID
       responses:
         '200':
-          description: List of subscribed channels
+          description: Subscriptions retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClientSubscriptions'
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '404':
           description: Client not found
           content:
@@ -478,7 +522,7 @@ paths:
   /api/channels/{channel}/subscribers:
     get:
       summary: Get channel subscribers
-      description: Get all clients subscribed to a channel
+      description: Retrieves all clients subscribed to a channel
       operationId: getChannelSubscribers
       parameters:
         - name: channel
@@ -486,20 +530,14 @@ paths:
           required: true
           schema:
             type: string
-          description: Channel name to get subscribers for
+          description: Channel name
       responses:
         '200':
-          description: List of subscribed clients
+          description: Subscribers retrieved successfully
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChannelSubscribers'
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '404':
           description: Channel not found
           content:

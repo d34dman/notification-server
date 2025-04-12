@@ -288,11 +288,31 @@ app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
  */
 app.post("/api/clients", async (req, res) => {
   try {
-    const clientId = await accessControl.generateClientId(req.body.metadata);
-    res.json({ clientId });
+    const { clientId, metadata } = req.body;
+    
+    // If clientId is provided, validate it
+    if (clientId) {
+      const isValid = await accessControl.validateClientId(clientId);
+      if (isValid) {
+        return res.status(200).json({ 
+          clientId,
+          message: 'Client ID is valid'
+        });
+      }
+    }
+    
+    // Generate new client ID if none provided or invalid
+    const newClientId = await accessControl.generateClientId(metadata);
+    res.status(201).json({ 
+      clientId: newClientId,
+      message: 'New client ID generated'
+    });
   } catch (error) {
-    logger.error("Error generating client ID:", error);
-    res.status(500).json({ error: "Failed to generate client ID" });
+    console.error('Error in client ID generation:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate client ID',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

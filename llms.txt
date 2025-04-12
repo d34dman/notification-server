@@ -1,16 +1,15 @@
-# Notification Server
+# Notification Server Project Analysis
 
 ## Project Overview
-
-A real-time notification server with WebSocket and HTTP API support, built with TypeScript, Express, and Redis.
+A real-time notification server with WebSocket and HTTP API support, built with TypeScript, Express, and Redis. The system provides secure client management, channel-based notifications, and access control.
 
 ## Core Components
 
 ### 1. Server Architecture
-- Express.js HTTP server
+- Express.js HTTP server for API endpoints
 - WebSocket server for real-time communication
 - Redis for pub/sub and data persistence
-- TypeScript for type safety
+- TypeScript for type safety and better development experience
 
 ### 2. Key Services
 - AccessControlService: Manages client IDs and channel access
@@ -21,18 +20,21 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 
 #### HTTP API
 - Client Management:
-  - POST /api/clients: Generate new client ID
-  - GET /api/clients/:clientId: Validate client ID
-  - GET /api/clients/:clientId/subscriptions: List client subscriptions
+  - POST /api/clients: Generate or validate client ID
+  - GET /api/clients/{clientId}: Validate client ID
+  - GET /api/clients/{clientId}/subscriptions: List client subscriptions
+  - GET /api/clients/{clientId}/channels: List accessible channels
+  - GET /api/clients/{clientId}/channels/{channel}: Check subscription status
 
 - Channel Management:
-  - POST /api/channels: Create new channel
-  - GET /api/channels/:channel/access/:clientId: Check channel access
-  - DELETE /api/channels/:channel/access/:clientId: Revoke channel access
+  - POST /api/channels: Create new channel with access rules
+  - POST /api/channels/{channel}/access/{clientId}: Grant channel access
+  - DELETE /api/channels/{channel}/access/{clientId}: Revoke channel access
+  - GET /api/channels/{channel}/subscribers: List channel subscribers
 
 - Notification Management:
   - POST /api/notifications: Publish notification
-  - GET /api/notifications/:channel: Get notification history
+  - GET /api/notifications/{channel}: Get notification history
 
 #### WebSocket API
 - Connection: ws://localhost:8080?clientId={clientId}
@@ -58,11 +60,12 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - PublishRequest: { channel, message }
 
 ### 5. Security Features
-- Client ID validation
-- Channel access control
+- Client ID validation and generation
+- Channel access control lists (ACLs)
 - WebSocket connection authentication
 - Rate limiting (configurable)
 - Channel pattern restrictions
+- Client metadata tracking
 
 ### 6. Demo Client
 - HTML/JavaScript based demo interface
@@ -70,6 +73,7 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - Real-time message display
 - Channel management UI
 - Subscription status tracking
+- Client ID management
 
 ## Dependencies
 - express: Web server framework
@@ -83,8 +87,9 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - Environment variables in .env
 - Redis connection settings
 - WebSocket server settings
-- Client ID expiration
+- Client ID expiration (7 days default)
 - Channel access rules
+- Rate limiting settings
 
 ## Development Setup
 1. Install dependencies: npm install
@@ -92,9 +97,7 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 3. Start Redis server
 4. Build TypeScript: npm run build
 5. Start server: npm start
-6. Access HTTP client: http://localhost:3000
-7. Access WebSocket client: http://localhost:8000
-8. Note that HTTP and Websocket client can also be configured to be run on different ports.
+6. Access demo client: http://localhost:3000/demo
 
 ## Testing
 - Manual testing via demo client
@@ -102,6 +105,7 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - Channel subscription testing
 - Notification publishing testing
 - Access control testing
+- Client ID validation testing
 
 ## Deployment Considerations
 - Redis persistence configuration
@@ -110,6 +114,8 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - Security headers
 - Error handling
 - Logging configuration
+- Client ID expiration management
+- Channel access control rules
 
 ## Future Enhancements
 - Authentication system
@@ -117,4 +123,25 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - Channel analytics
 - Client monitoring
 - API documentation
-- Automated testing 
+- Automated testing
+- WebSocket reconnection handling
+- Channel message retention policies
+- Client metadata management
+- Access control rule templates
+
+## API Documentation
+- OpenAPI specification (openapi.yaml)
+- AsyncAPI specification (asyncapi.yaml)
+- Demo client documentation
+- API usage examples
+- Error handling guidelines
+
+## Security Best Practices
+- Client ID validation
+- Channel access control
+- Rate limiting
+- Input validation
+- Error handling
+- Logging and monitoring
+- Secure WebSocket connections
+- Redis security configuration 
