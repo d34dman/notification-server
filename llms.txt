@@ -1,0 +1,120 @@
+# Notification Server
+
+## Project Overview
+
+A real-time notification server with WebSocket and HTTP API support, built with TypeScript, Express, and Redis.
+
+## Core Components
+
+### 1. Server Architecture
+- Express.js HTTP server
+- WebSocket server for real-time communication
+- Redis for pub/sub and data persistence
+- TypeScript for type safety
+
+### 2. Key Services
+- AccessControlService: Manages client IDs and channel access
+- WebSocketManager: Handles WebSocket connections and subscriptions
+- NotificationService: Manages notification publishing and history
+
+### 3. API Endpoints
+
+#### HTTP API
+- Client Management:
+  - POST /api/clients: Generate new client ID
+  - GET /api/clients/:clientId: Validate client ID
+  - GET /api/clients/:clientId/subscriptions: List client subscriptions
+
+- Channel Management:
+  - POST /api/channels: Create new channel
+  - GET /api/channels/:channel/access/:clientId: Check channel access
+  - DELETE /api/channels/:channel/access/:clientId: Revoke channel access
+
+- Notification Management:
+  - POST /api/notifications: Publish notification
+  - GET /api/notifications/:channel: Get notification history
+
+#### WebSocket API
+- Connection: ws://localhost:8080?clientId={clientId}
+- Message Types:
+  - subscription: Subscribe/unsubscribe to channels
+  - notification: Real-time notifications
+  - error: Error messages
+  - connection: Connection status
+
+### 4. Data Models
+
+#### Redis Keys
+- Client Keys: client:{clientId}
+- Channel Keys: channel:{channel}
+- Subscription Keys: 
+  - client:{clientId}:subscriptions
+  - channel:{channel}:subscribers
+- Notification Keys: channel:{channel}:notifications
+
+#### Message Types
+- NotificationMessage: { type, data }
+- SubscriptionRequest: { type, action, channel }
+- PublishRequest: { channel, message }
+
+### 5. Security Features
+- Client ID validation
+- Channel access control
+- WebSocket connection authentication
+- Rate limiting (configurable)
+- Channel pattern restrictions
+
+### 6. Demo Client
+- HTML/JavaScript based demo interface
+- Environment variable configuration
+- Real-time message display
+- Channel management UI
+- Subscription status tracking
+
+## Dependencies
+- express: Web server framework
+- ws: WebSocket server
+- ioredis: Redis client
+- dotenv: Environment variable management
+- typescript: Type safety
+- @types/*: Type definitions
+
+## Configuration
+- Environment variables in .env
+- Redis connection settings
+- WebSocket server settings
+- Client ID expiration
+- Channel access rules
+
+## Development Setup
+1. Install dependencies: npm install
+2. Configure environment: .env
+3. Start Redis server
+4. Build TypeScript: npm run build
+5. Start server: npm start
+6. Access HTTP client: http://localhost:3000
+7. Access WebSocket client: http://localhost:8000
+8. Note that HTTP and Websocket client can also be configured to be run on different ports.
+
+## Testing
+- Manual testing via demo client
+- WebSocket connection testing
+- Channel subscription testing
+- Notification publishing testing
+- Access control testing
+
+## Deployment Considerations
+- Redis persistence configuration
+- WebSocket load balancing
+- Rate limiting settings
+- Security headers
+- Error handling
+- Logging configuration
+
+## Future Enhancements
+- Authentication system
+- Message persistence
+- Channel analytics
+- Client monitoring
+- API documentation
+- Automated testing 
