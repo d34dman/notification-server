@@ -144,4 +144,47 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - Error handling
 - Logging and monitoring
 - Secure WebSocket connections
-- Redis security configuration 
+- Redis security configuration
+
+## Channel Management Endpoints
+
+### Create Channel
+- **Endpoint**: `POST /api/channels`
+- **Description**: Creates a new channel with specified rules
+- **Request Body**:
+  ```json
+  {
+    "channel": "channel-name",
+    "rules": {
+      "isPublic": true,
+      "allowedClientIds": ["client1", "client2"],
+      "maxSubscribers": 100
+    }
+  }
+  ```
+- **Success Response**: 201 Created
+  ```json
+  {
+    "channel": "channel-name",
+    "rules": { ... }
+  }
+  ```
+- **Error Responses**:
+  - 400: Channel name is required
+  - 409: Channel already exists
+  - 500: Server error
+
+### Delete Channel
+- **Endpoint**: `DELETE /api/channels/:channel`
+- **Description**: Deletes an existing channel and all its subscriptions
+- **Success Response**: 200 OK
+  ```json
+  {
+    "message": "Channel 'channel-name' deleted successfully",
+    "channel": "channel-name"
+  }
+  ```
+- **Error Responses**:
+  - 400: Channel name is required
+  - 404: Channel not found
+  - 500: Server error 

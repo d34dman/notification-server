@@ -89,6 +89,7 @@ The HTTP API is documented in `openapi.yaml` and provides the following endpoint
 - **Client Management**
   - `POST /api/clients` - Generate a new client ID
   - `GET /api/clients/{clientId}` - Validate a client ID
+  - `DELETE /api/clients/{clientId}` - Delete a client and all its data
 
 - **Channel Management**
   - `POST /api/channels` - Create a new channel
@@ -246,4 +247,15 @@ curl -X DELETE http://localhost:3000/api/channels/my-channel
 ### Error Handling
 - Channel creation will fail with a 409 status if the channel already exists
 - Channel deletion will fail with a 404 status if the channel doesn't exist
-- Both operations require a valid channel name 
+- Both operations require a valid channel name
+
+### Client Management
+```bash
+# Generate a new client ID
+curl -X POST http://localhost:3000/api/clients \
+  -H "Content-Type: application/json" \
+  -d '{"metadata": {"userAgent": "Demo Client"}}'
+
+# Delete a client and all its data
+curl -X DELETE http://localhost:3000/api/clients/client123
+``` 

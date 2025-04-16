@@ -515,6 +515,53 @@ app.delete("/api/channels/:channel", async (req, res) => {
   }
 });
 
+// Client Management
+app.delete("/api/clients/:clientId", async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    
+    // Check if client exists
+    const exists = await redisClient.exists(`client:${clientId}`);
+    if (!exists) {
+      return res.status(404).json({ 
+        error: "Client not found",
+        message: `Client '${clientId}' does not exist`
+      });
+    }
+
+    // Get all channels the client is subscribed to
+    const subscribedChannels = await redisClient.smembers(`client:${clientId}:channels`);
+    
+    // Remove client from all channel subscriber lists
+    for (const channel of subscribedChannels) {
+      await redisClient.srem(`channel:${channel}:subscribers`, clientId);
+    }
+
+    // Get all channels the client has access to
+    const accessibleChannels = await redisClient.smembers(`client:${clientId}:accessible`);
+    
+    // Remove client from all channel access lists
+    for (const channel of accessibleChannels) {
+      await redisClient.srem(`channel:${channel}:allowed`, clientId);
+    }
+
+    // Delete client data
+    await redisClient.del(`client:${clientId}`);
+    await redisClient.del(`client:${clientId}:channels`);
+    await redisClient.del(`client:${clientId}:accessible`);
+
+    res.status(200).json({
+      message: `Client '${clientId}' deleted successfully`,
+      clientId,
+      deletedSubscriptions: subscribedChannels.length,
+      deletedChannels: accessibleChannels.length
+    });
+  } catch (error) {
+    logger.error(`Error deleting client: ${error}`);
+    res.status(500).json({ error: "Failed to delete client" });
+  }
+});
+
 // Error handling middleware
 app.use(errorHandler);
 

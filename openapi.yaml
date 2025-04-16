@@ -201,6 +201,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete a client
+      description: Deletes a client and all its associated data (subscriptions, channel access)
+      operationId: deleteClient
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Client ID to delete
+      responses:
+        '200':
+          description: Client deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Success message
+                  clientId:
+                    type: string
+                    description: Deleted client ID
+                  deletedSubscriptions:
+                    type: integer
+                    description: Number of subscriptions removed
+                  deletedChannels:
+                    type: integer
+                    description: Number of channel access entries removed
+        '404':
+          description: Client not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/channels:
     post:
