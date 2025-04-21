@@ -543,6 +543,9 @@ app.delete("/api/clients/:clientId", async (req, res) => {
       await subscriptionService.unsubscribe(clientId, channel);
     }
 
+    // Delete client data
+    await accessControl.deleteClient(clientId);
+
     res.status(200).json({
       message: `Client '${clientId}' deleted successfully`,
       clientId,

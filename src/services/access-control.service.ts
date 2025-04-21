@@ -15,6 +15,14 @@ export class AccessControlService {
   }
 
   /**
+   * Deletes a client from Redis
+   * @param clientId Client ID to delete
+   */
+  async deleteClient(clientId: string): Promise<void> {
+    await this.redis.del(`client:${clientId}`);
+  }
+
+  /**
    * Generates a new client ID and stores it in Redis
    * @param metadata Optional metadata to store with the client ID
    * @param clientId Optional client ID to use instead of generating a new one
