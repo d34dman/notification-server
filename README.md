@@ -259,3 +259,7 @@ curl -X POST http://localhost:3000/api/clients \
 # Delete a client and all its data
 curl -X DELETE http://localhost:3000/api/clients/client123
 ``` 
+
+### Architecture
+
+![Sequence Diagram](./docs/notification-server-sequence-diagram.svg)

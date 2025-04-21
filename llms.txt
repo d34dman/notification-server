@@ -187,4 +187,20 @@ A real-time notification server with WebSocket and HTTP API support, built with 
 - **Error Responses**:
   - 400: Channel name is required
   - 404: Channel not found
+  - 500: Server error
+
+### Delete Client
+- **Endpoint**: `DELETE /api/clients/:clientId`
+- **Description**: Deletes a client and all its associated data (subscriptions, channel access)
+- **Success Response**: 200 OK
+  ```json
+  {
+    "message": "Client 'client123' deleted successfully",
+    "clientId": "client123",
+    "deletedSubscriptions": 5,
+    "deletedChannels": 3
+  }
+  ```
+- **Error Responses**:
+  - 404: Client not found
   - 500: Server error 
