@@ -40,7 +40,7 @@ export class NotificationService {
     const key = `${this.NOTIFICATION_PREFIX}${channel}`;
     try {
       const notifications = await this.redis.lrange(key, 0, limit - 1);
-      return notifications.map((n) => JSON.parse(n));
+      return notifications.map(n => JSON.parse(n));
     } catch (error) {
       logger.error("Error getting notifications:", error);
       throw error;

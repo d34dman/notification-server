@@ -9,7 +9,7 @@ interface EnvVariables {
 export function validateEnv(): void {
   const requiredEnvVars: (keyof EnvVariables)[] = ["PORT", "REDIS_URL", "WS_PORT"];
 
-  const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
+  const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
   if (missingEnvVars.length > 0) {
     logger.error(`Missing required environment variables: ${missingEnvVars.join(", ")}`);

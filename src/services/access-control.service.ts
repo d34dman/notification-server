@@ -4,11 +4,17 @@ import { logger } from "../utils/logger";
 /**
  * Service for managing client IDs and channel access control
  */
+interface ClientMetadata {
+  userAgent?: string;
+  ipAddress?: string;
+  [key: string]: unknown;
+}
+
 export class AccessControlService {
   private readonly redis: Redis;
   private readonly clientIdExpiration: number;
 
-  constructor(redis: Redis, clientIdExpiration: number = 7 * 24 * 60 * 60) {
+  constructor(redis: Redis, clientIdExpiration: number = 7 * 24 * 60 * 60 * 1000) {
     // Default 7 days
     this.redis = redis;
     this.clientIdExpiration = clientIdExpiration;
@@ -28,23 +34,14 @@ export class AccessControlService {
    * @param clientId Optional client ID to use instead of generating a new one
    * @returns The generated or provided client ID
    */
-  async generateClientId(metadata: Record<string, any> = {}, clientId?: string): Promise<string> {
-    const id = clientId || `client.${Date.now()}.${crypto.randomUUID()}`;
-    const key = `client:${id}`;
+  async generateClientId(metadata: ClientMetadata = {}, providedId?: string): Promise<string> {
+    const clientId = providedId || crypto.randomUUID();
+    const metadataString = JSON.stringify(metadata);
 
-    await this.redis.set(
-      key,
-      JSON.stringify({
-        id,
-        metadata,
-        createdAt: new Date().toISOString(),
-      }),
-      "EX",
-      this.clientIdExpiration
-    );
+    await this.redis.set(`client:${clientId}`, metadataString, "PX", this.clientIdExpiration);
 
-    logger.info(`Generated new client ID: ${id}`);
-    return id;
+    logger.info(`Generated new client ID: ${clientId}`);
+    return clientId;
   }
 
   /**

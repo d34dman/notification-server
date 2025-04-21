@@ -622,6 +622,6 @@ async function initializeDemoChannel(): Promise<void> {
 }
 
 // Initialize demo channel on startup
-initializeDemoChannel().catch((error) => {
+initializeDemoChannel().catch(error => {
   logger.error("Error during demo channel initialization:", error);
 });
