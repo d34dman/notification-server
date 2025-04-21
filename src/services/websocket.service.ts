@@ -256,21 +256,30 @@ export class WebSocketManager {
 
   public async broadcastNotification(channel: string, notification: NotificationMessage): Promise<void> {
     try {
+      // Get all subscribers for the channel
       const subscribers = await this.redis.smembers(`channel:${channel}:subscribers`);
-      
+      logger.debug(`Broadcasting notification to ${subscribers.length} subscribers in channel ${channel}`);
+
+      // Send notification to each subscribed client
       for (const clientId of subscribers) {
         const client = this.clients.get(clientId);
         if (client && client.subscribedChannels.has(channel)) {
           try {
-            client.ws.send(JSON.stringify(notification));
+            client.ws.send(JSON.stringify({
+              type: "notification",
+              data: notification
+            }));
+            logger.debug(`Sent notification to client ${clientId} in channel ${channel}`);
           } catch (error) {
             logger.error(`Error sending notification to client ${clientId}:`, error);
-            this.closeClient(clientId, 1011, "Error sending notification");
+            // If there's an error sending to a client, remove them from the channel
+            await this.handleUnsubscribe(client, { type: "unsubscribe", channel });
           }
         }
       }
     } catch (error) {
       logger.error(`Error broadcasting notification to channel ${channel}:`, error);
+      throw error;
     }
   }
 

@@ -16,10 +16,8 @@ export interface NotificationMessage {
  * Interface representing a subscription request
  */
 export interface SubscriptionRequest {
-  /** Channel to subscribe to */
+  type: "subscribe" | "unsubscribe";
   channel: string;
-  /** Client identifier */
-  clientId: string;
 }
 
 /**
