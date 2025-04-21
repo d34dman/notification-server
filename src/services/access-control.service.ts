@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import { logger } from "../utils/logger";
+import { randomUUID } from "node:crypto";
 
 /**
  * Service for managing client IDs and channel access control
@@ -14,7 +15,7 @@ export class AccessControlService {
   private readonly redis: Redis;
   private readonly clientIdExpiration: number;
 
-  constructor(redis: Redis, clientIdExpiration: number = 7 * 24 * 60 * 60 * 1000) {
+  constructor(redis: Redis, clientIdExpiration: number = 7 * 24 * 60 * 60) {
     // Default 7 days
     this.redis = redis;
     this.clientIdExpiration = clientIdExpiration;
@@ -35,10 +36,10 @@ export class AccessControlService {
    * @returns The generated or provided client ID
    */
   async generateClientId(metadata: ClientMetadata = {}, providedId?: string): Promise<string> {
-    const clientId = providedId || crypto.randomUUID();
+    const clientId = providedId || randomUUID();
     const metadataString = JSON.stringify(metadata);
 
-    await this.redis.set(`client:${clientId}`, metadataString, "PX", this.clientIdExpiration);
+    await this.redis.set(`client:${clientId}`, metadataString, "EX", this.clientIdExpiration);
 
     logger.info(`Generated new client ID: ${clientId}`);
     return clientId;

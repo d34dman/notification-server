@@ -51,8 +51,7 @@ const accessControl = new AccessControlService(redisClient, clientIdExpiration);
 const wsManager = new WebSocketManager(
   redisClient,
   accessControl,
-  notificationService,
-  subscriptionService
+  notificationService
 );
 
 // Middleware
@@ -575,25 +574,32 @@ wss.on("listening", () => {
   logger.info(`WebSocket server running on port ${WS_PORT}`);
 });
 
-// Handle WebSocket connections
-wss.on("connection", async (ws, req) => {
+// WebSocket upgrade handler
+wss.on("upgrade", async (request, socket, head) => {
   try {
-    // Extract client ID from URL query parameters
-    const protocol = req.headers["x-forwarded-proto"] === "https" ? "wss" : "ws";
-    const url = new URL(req.url || "", `${protocol}://${req.headers.host}`);
+    const url = new URL(request.url || "", `http://${request.headers.host}`);
     const clientId = url.searchParams.get("clientId");
 
     if (!clientId) {
-      logger.warn("WebSocket connection attempt without client ID");
-      ws.close(4000, "Client ID is required");
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
       return;
     }
 
-    // Handle the connection with the client ID
-    await wsManager.handleConnection(ws, clientId);
+    // Validate client ID
+    const isValid = await accessControl.validateClientId(clientId);
+    if (!isValid) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    // Handle WebSocket upgrade
+    wsManager.handleUpgrade(request, socket, head, clientId);
   } catch (error) {
-    logger.error("Error handling WebSocket connection:", error);
-    ws.close(4000, "Connection error");
+    logger.error("WebSocket upgrade error:", error);
+    socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+    socket.destroy();
   }
 });
 
