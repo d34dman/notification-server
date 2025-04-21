@@ -8,7 +8,8 @@ export class AccessControlService {
   private readonly redis: Redis;
   private readonly clientIdExpiration: number;
 
-  constructor(redis: Redis, clientIdExpiration: number = 7 * 24 * 60 * 60) { // Default 7 days
+  constructor(redis: Redis, clientIdExpiration: number = 7 * 24 * 60 * 60) {
+    // Default 7 days
     this.redis = redis;
     this.clientIdExpiration = clientIdExpiration;
   }
@@ -22,13 +23,18 @@ export class AccessControlService {
   async generateClientId(metadata: Record<string, any> = {}, clientId?: string): Promise<string> {
     const id = clientId || `client.${Date.now()}.${crypto.randomUUID()}`;
     const key = `client:${id}`;
-    
-    await this.redis.set(key, JSON.stringify({
-      id,
-      metadata,
-      createdAt: new Date().toISOString()
-    }), 'EX', this.clientIdExpiration);
-    
+
+    await this.redis.set(
+      key,
+      JSON.stringify({
+        id,
+        metadata,
+        createdAt: new Date().toISOString(),
+      }),
+      "EX",
+      this.clientIdExpiration
+    );
+
     logger.info(`Generated new client ID: ${id}`);
     return id;
   }
@@ -78,17 +84,17 @@ export class AccessControlService {
       allowedClientIds: JSON.stringify(rules.allowedClientIds || []),
       allowedPatterns: JSON.stringify(rules.allowedPatterns || []),
       maxSubscribers: rules.maxSubscribers?.toString() || "0",
-      isPublic: rules.isPublic ? "1" : "0"
+      isPublic: rules.isPublic ? "1" : "0",
     };
 
-    logger.debug('Creating channel with rules:', { channel, rules: channelRules });
-    
+    logger.debug("Creating channel with rules:", { channel, rules: channelRules });
+
     await this.redis.hset(`channel:${channel}:rules`, channelRules);
-    
+
     // Verify the rules were stored correctly
     const storedRules = await this.redis.hgetall(`channel:${channel}:rules`);
-    logger.debug('Stored channel rules:', { channel, storedRules });
-    
+    logger.debug("Stored channel rules:", { channel, storedRules });
+
     logger.info(`Created new channel: ${channel} with rules: ${JSON.stringify(rules)}`);
   }
 
@@ -99,12 +105,12 @@ export class AccessControlService {
    * @returns True if client has access to the channel
    */
   public async hasChannelAccess(clientId: string, channel: string): Promise<boolean> {
-    logger.debug('Checking channel access:', { clientId, channel });
-    
+    logger.debug("Checking channel access:", { clientId, channel });
+
     // Get channel rules
     const rules = await this.redis.hgetall(`channel:${channel}:rules`);
-    logger.debug('Retrieved channel rules:', { channel, rules });
-    
+    logger.debug("Retrieved channel rules:", { channel, rules });
+
     if (!rules) {
       logger.warn(`Channel ${channel} does not exist`);
       return false;
@@ -112,32 +118,32 @@ export class AccessControlService {
 
     // If channel is public, allow access
     if (rules.isPublic === "1") {
-      logger.debug('Channel is public, allowing access:', { channel, clientId });
+      logger.debug("Channel is public, allowing access:", { channel, clientId });
       return true;
     }
 
     // Check explicit client ID allowlist
     const allowedClientIds = JSON.parse(rules.allowedClientIds || "[]");
-    logger.debug('Checking allowed client IDs:', { allowedClientIds, clientId });
-    
+    logger.debug("Checking allowed client IDs:", { allowedClientIds, clientId });
+
     if (allowedClientIds.includes(clientId)) {
-      logger.debug('Client ID found in allowlist:', { clientId, channel });
+      logger.debug("Client ID found in allowlist:", { clientId, channel });
       return true;
     }
 
     // Check pattern matching
     const allowedPatterns = JSON.parse(rules.allowedPatterns || "[]");
-    logger.debug('Checking allowed patterns:', { allowedPatterns, clientId });
-    
+    logger.debug("Checking allowed patterns:", { allowedPatterns, clientId });
+
     for (const pattern of allowedPatterns) {
       if (new RegExp(pattern).test(clientId)) {
-        logger.debug('Client ID matches pattern:', { pattern, clientId, channel });
+        logger.debug("Client ID matches pattern:", { pattern, clientId, channel });
         return true;
       }
     }
 
     // If no rules match and channel is not public, deny access
-    logger.debug('Access denied - no matching rules:', { clientId, channel });
+    logger.debug("Access denied - no matching rules:", { clientId, channel });
     return false;
   }
 
@@ -148,23 +154,23 @@ export class AccessControlService {
    */
   public async getAccessibleChannels(clientId: string): Promise<string[]> {
     const accessibleChannels: string[] = [];
-    
+
     // Get all channel keys
     const channelKeys = await this.redis.keys("channel:*:rules");
-    
+
     for (const key of channelKeys) {
       const channel = key.replace("channel:", "").replace(":rules", "");
       const rules = await this.redis.hgetall(key);
-      
+
       if (!rules) continue;
-      
+
       // Check if client is in allowedClientIds
       const allowedClientIds = JSON.parse(rules.allowedClientIds || "[]");
       if (allowedClientIds.includes(clientId)) {
         accessibleChannels.push(channel);
         continue;
       }
-      
+
       // Check if client matches any allowed patterns
       const allowedPatterns = JSON.parse(rules.allowedPatterns || "[]");
       for (const pattern of allowedPatterns) {
@@ -174,7 +180,7 @@ export class AccessControlService {
         }
       }
     }
-    
+
     return accessibleChannels;
   }
 
@@ -191,11 +197,11 @@ export class AccessControlService {
 
     const allowedClientIds = JSON.parse(rules.allowedClientIds || "[]");
     const updatedClientIds = allowedClientIds.filter((id: string) => id !== clientId);
-    
+
     await this.redis.hset(`channel:${channel}:rules`, {
-      allowedClientIds: JSON.stringify(updatedClientIds)
+      allowedClientIds: JSON.stringify(updatedClientIds),
     });
-    
+
     logger.info(`Revoked access for client ${clientId} from channel ${channel}`);
   }
-} 
+}

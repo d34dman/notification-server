@@ -74,11 +74,17 @@ export class SubscriptionService {
    */
   public async isSubscribed(clientId: string, channel: string): Promise<boolean> {
     try {
-      const result = await this.redis.sismember(`${this.CLIENT_SUBSCRIPTIONS_PREFIX}${clientId}`, channel);
+      const result = await this.redis.sismember(
+        `${this.CLIENT_SUBSCRIPTIONS_PREFIX}${clientId}`,
+        channel
+      );
       return result === 1;
     } catch (error) {
-      logger.error(`Error checking subscription status for client ${clientId} on channel ${channel}:`, error);
+      logger.error(
+        `Error checking subscription status for client ${clientId} on channel ${channel}:`,
+        error
+      );
       throw error;
     }
   }
-} 
+}

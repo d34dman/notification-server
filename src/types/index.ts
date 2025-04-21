@@ -43,7 +43,14 @@ export type RedisChannelKey = `notification:channel:${string}`;
 export type RedisClientKey = `notification:client:${string}` | `subscription:client:${string}`;
 
 export interface WebSocketMessage {
-  type: "subscribe" | "unsubscribe" | "notification" | "error" | "connection" | "subscribed" | "unsubscribed";
+  type:
+    | "subscribe"
+    | "unsubscribe"
+    | "notification"
+    | "error"
+    | "connection"
+    | "subscribed"
+    | "unsubscribed";
   channel?: string;
   clientId?: string;
   message?: string;

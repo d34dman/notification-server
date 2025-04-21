@@ -33,7 +33,10 @@ export class NotificationService {
   /**
    * Get recent notifications for a channel
    */
-  public async getNotifications(channel: string, limit: number = 10): Promise<NotificationMessage[]> {
+  public async getNotifications(
+    channel: string,
+    limit: number = 10
+  ): Promise<NotificationMessage[]> {
     const key = `${this.NOTIFICATION_PREFIX}${channel}`;
     try {
       const notifications = await this.redis.lrange(key, 0, limit - 1);
@@ -96,4 +99,4 @@ export class NotificationService {
       timestamp: Date.now(),
     };
   }
-} 
+}

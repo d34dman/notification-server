@@ -52,18 +52,20 @@ export class WebSocketManager {
         ws,
         clientId,
         subscribedChannels: new Set(),
-        lastValidation: Date.now()
+        lastValidation: Date.now(),
       };
 
       // Store client
       this.clients.set(clientId, client);
 
       // Send connection confirmation
-      ws.send(JSON.stringify({
-        type: "connection",
-        clientId,
-        message: "Connected successfully"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "connection",
+          clientId,
+          message: "Connected successfully",
+        })
+      );
 
       logger.info(`Client connected: ${clientId}`);
 
@@ -75,7 +77,6 @@ export class WebSocketManager {
 
       // Set up periodic validation
       this.setupValidationInterval(client);
-
     } catch (error) {
       logger.error(`Connection error: ${error}`);
       ws.close(4000, "Connection error");
@@ -118,7 +119,7 @@ export class WebSocketManager {
     try {
       const data = JSON.parse(message);
       const client = this.getClientByWebSocket(ws);
-      
+
       if (!client) {
         logger.warn("Received message from unknown client");
         return;
@@ -133,18 +134,26 @@ export class WebSocketManager {
       }
 
       client.lastValidation = Date.now();
-      logger.debug('Received WebSocket message:', { data, clientId: client.clientId });
+      logger.debug("Received WebSocket message:", { data, clientId: client.clientId });
 
       // Handle both "subscription" and direct "subscribe"/"unsubscribe" message types
-      if (data.type === "subscription" || data.type === "subscribe" || data.type === "unsubscribe") {
+      if (
+        data.type === "subscription" ||
+        data.type === "subscribe" ||
+        data.type === "unsubscribe"
+      ) {
         const action = data.type === "subscription" ? data.action : data.type;
         const channel = data.channel;
-        
-        logger.debug('Processing subscription message:', { action, channel, clientId: client.clientId });
-        
+
+        logger.debug("Processing subscription message:", {
+          action,
+          channel,
+          clientId: client.clientId,
+        });
+
         await this.handleSubscription(client, {
           action,
-          channel
+          channel,
         });
       } else {
         logger.warn(`Unknown message type: ${data.type}`, { data });
@@ -152,10 +161,12 @@ export class WebSocketManager {
     } catch (error) {
       logger.error(`Message handling error: ${error}`);
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: "error",
-          message: "Invalid message format"
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Invalid message format",
+          })
+        );
       }
     }
   }
@@ -172,17 +183,23 @@ export class WebSocketManager {
     const { action, channel } = data;
 
     try {
-      logger.debug('Checking channel access:', { clientId: client.clientId, channel });
-      
+      logger.debug("Checking channel access:", { clientId: client.clientId, channel });
+
       // Check channel access
       const hasAccess = await this.accessControl.hasChannelAccess(client.clientId, channel);
-      logger.debug('Channel access check result:', { hasAccess, clientId: client.clientId, channel });
+      logger.debug("Channel access check result:", {
+        hasAccess,
+        clientId: client.clientId,
+        channel,
+      });
 
       if (!hasAccess) {
-        client.ws.send(JSON.stringify({
-          type: "error",
-          message: `Access denied to channel: ${channel}`
-        }));
+        client.ws.send(
+          JSON.stringify({
+            type: "error",
+            message: `Access denied to channel: ${channel}`,
+          })
+        );
         return;
       }
 
@@ -193,10 +210,12 @@ export class WebSocketManager {
       }
     } catch (error) {
       logger.error(`Subscription error: ${error}`);
-      client.ws.send(JSON.stringify({
-        type: "error",
-        message: "Subscription error"
-      }));
+      client.ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Subscription error",
+        })
+      );
     }
   }
 
@@ -209,23 +228,27 @@ export class WebSocketManager {
     try {
       // Use subscription service to manage subscriptions
       await this.subscriptionService.subscribe(client.clientId, channel);
-      
+
       // Update local state
       client.subscribedChannels.add(channel);
 
-      client.ws.send(JSON.stringify({
-        type: "subscription",
-        action: "subscribed",
-        channel
-      }));
+      client.ws.send(
+        JSON.stringify({
+          type: "subscription",
+          action: "subscribed",
+          channel,
+        })
+      );
 
       logger.info(`Client ${client.clientId} subscribed to channel ${channel}`);
     } catch (error) {
       logger.error(`Error subscribing client ${client.clientId} to channel ${channel}:`, error);
-      client.ws.send(JSON.stringify({
-        type: "error",
-        message: "Failed to subscribe to channel"
-      }));
+      client.ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Failed to subscribe to channel",
+        })
+      );
     }
   }
 
@@ -238,23 +261,27 @@ export class WebSocketManager {
     try {
       // Use subscription service to manage subscriptions
       await this.subscriptionService.unsubscribe(client.clientId, channel);
-      
+
       // Update local state
       client.subscribedChannels.delete(channel);
 
-      client.ws.send(JSON.stringify({
-        type: "subscription",
-        action: "unsubscribed",
-        channel
-      }));
+      client.ws.send(
+        JSON.stringify({
+          type: "subscription",
+          action: "unsubscribed",
+          channel,
+        })
+      );
 
       logger.info(`Client ${client.clientId} unsubscribed from channel ${channel}`);
     } catch (error) {
       logger.error(`Error unsubscribing client ${client.clientId} from channel ${channel}:`, error);
-      client.ws.send(JSON.stringify({
-        type: "error",
-        message: "Failed to unsubscribe from channel"
-      }));
+      client.ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Failed to unsubscribe from channel",
+        })
+      );
     }
   }
 
@@ -302,28 +329,32 @@ export class WebSocketManager {
   public async broadcastNotification(channel: string, notification: unknown): Promise<void> {
     try {
       const subscribers = await this.subscriptionService.getChannelSubscribers(channel);
-      
+
       for (const clientId of subscribers) {
         // Check if client still has access to the channel
         const hasAccess = await this.accessControl.hasChannelAccess(clientId, channel);
         if (!hasAccess) {
           // Remove client from subscribers if they no longer have access
           await this.subscriptionService.unsubscribe(clientId, channel);
-          logger.warn(`Removed client ${clientId} from channel ${channel} subscribers due to revoked access`);
+          logger.warn(
+            `Removed client ${clientId} from channel ${channel} subscribers due to revoked access`
+          );
           continue;
         }
 
         const client = this.clients.get(clientId);
         if (client && client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({
-            type: "notification",
-            channel,
-            data: notification
-          }));
+          client.ws.send(
+            JSON.stringify({
+              type: "notification",
+              channel,
+              data: notification,
+            })
+          );
         }
       }
     } catch (error) {
       logger.error(`Error broadcasting notification to channel ${channel}:`, error);
     }
   }
-} 
+}

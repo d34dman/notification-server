@@ -25,19 +25,19 @@ const app = express();
 const httpServer = createServer(app);
 
 // Create WebSocket server with CORS configuration
-const wss = new WebSocketServer({ 
+const wss = new WebSocketServer({
   port: parseInt(process.env.WS_PORT || "8080", 10),
   verifyClient: (info, callback) => {
     const origin = info.origin || info.req.headers.origin;
     const allowedOrigin = process.env.CORS_ORIGIN || "*";
-    
+
     if (allowedOrigin === "*" || origin === allowedOrigin) {
       callback(true);
     } else {
       logger.warn(`Rejected connection from unauthorized origin: ${origin}`);
       callback(false, 403, "Origin not allowed");
     }
-  }
+  },
 });
 
 // Create Redis client
@@ -56,33 +56,37 @@ const wsManager = new WebSocketManager(
 );
 
 // Middleware
-app.use(helmet({
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "unsafe-none" }
-}));
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
+  })
+);
 
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 
 // Routes
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 /**
- * Notification Service 
- * 
+ * Notification Service
+ *
  * This endpoint is used to send notifications to a specific channel.
- * 
+ *
  * @group Server API
- * @route POST /api/notifications 
+ * @route POST /api/notifications
  * @param {string} req.body.channel - The channel to send the notification to.
  * @param {string} req.body.message - The message to send to the channel.
  * @returns {object} 200 - The notification object.
@@ -91,7 +95,7 @@ app.get('/api/health', (req, res) => {
 app.post("/api/notifications", async (req, res) => {
   try {
     const { channel, message } = req.body;
-    
+
     if (!channel || !message) {
       return res.status(400).json({ error: "Channel and message are required" });
     }
@@ -100,15 +104,15 @@ app.post("/api/notifications", async (req, res) => {
       id: uuidv4(),
       channel,
       message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // Store notification
     await notificationService.storeNotification(notification);
-    
+
     // Broadcast to subscribers
     await wsManager.broadcastNotification(channel, notification);
-    
+
     res.json(notification);
   } catch (error) {
     logger.error(`Error publishing notification: ${error}`);
@@ -118,9 +122,9 @@ app.post("/api/notifications", async (req, res) => {
 
 /**
  * Notification Service
- * 
+ *
  * This endpoint is used to get notifications from a specific channel.
- * 
+ *
  * @group Server API
  * @route GET /api/notifications/:channel
  * @param {string} req.params.channel - The channel to get notifications from.
@@ -132,12 +136,9 @@ app.get("/api/notifications/:channel", async (req, res) => {
   try {
     const { channel } = req.params;
     const { limit = 10 } = req.query;
-    
-    const notifications = await notificationService.getNotifications(
-      channel,
-      Number(limit)
-    );
-    
+
+    const notifications = await notificationService.getNotifications(channel, Number(limit));
+
     res.json(notifications);
   } catch (error) {
     logger.error("Error getting notifications:", error);
@@ -147,9 +148,9 @@ app.get("/api/notifications/:channel", async (req, res) => {
 
 /**
  * Subscription Service
- * 
+ *
  * This endpoint is used to subscribe to a specific channel.
- * 
+ *
  * @deprecated This endpoint is deprecated. Use the WebSocket connection instead.
  * @group Server API
  * @route POST /api/channels/:channel/subscribe
@@ -161,11 +162,11 @@ app.get("/api/notifications/:channel", async (req, res) => {
 app.post("/api/channels/:channel/subscribe", async (req, res) => {
   const { channel } = req.params;
   const { clientId } = req.body;
-  
+
   if (!clientId) {
     return res.status(400).json({ error: "Client ID is required" });
   }
-  
+
   try {
     await subscriptionService.subscribe(clientId, channel);
     res.status(200).json({ message: `Subscribed to channel: ${channel}` });
@@ -177,9 +178,9 @@ app.post("/api/channels/:channel/subscribe", async (req, res) => {
 
 /**
  * Subscription Service
- * 
+ *
  * This endpoint is used to unsubscribe from a specific channel.
- * 
+ *
  * @deprecated This endpoint is deprecated. Use the WebSocket connection instead.
  * @group Server API
  * @route POST /api/channels/:channel/unsubscribe
@@ -191,11 +192,11 @@ app.post("/api/channels/:channel/subscribe", async (req, res) => {
 app.post("/api/channels/:channel/unsubscribe", async (req, res) => {
   const { channel } = req.params;
   const { clientId } = req.body;
-  
+
   if (!clientId) {
     return res.status(400).json({ error: "Client ID is required" });
   }
-  
+
   try {
     await subscriptionService.unsubscribe(clientId, channel);
     res.status(200).json({ message: `Unsubscribed from channel: ${channel}` });
@@ -207,9 +208,9 @@ app.post("/api/channels/:channel/unsubscribe", async (req, res) => {
 
 /**
  * Subscription Service
- * 
+ *
  * This endpoint is used to get the client's subscriptions.
- * 
+ *
  * @group Server API
  * @route GET /api/clients/:clientId/subscriptions
  * @param {string} req.params.clientId - The client ID to get subscriptions for.
@@ -218,7 +219,7 @@ app.post("/api/channels/:channel/unsubscribe", async (req, res) => {
  */
 app.get("/api/clients/:clientId/subscriptions", async (req, res) => {
   const { clientId } = req.params;
-  
+
   try {
     const subscriptions = await subscriptionService.getClientSubscriptions(clientId);
     res.json({ subscriptions });
@@ -230,9 +231,9 @@ app.get("/api/clients/:clientId/subscriptions", async (req, res) => {
 
 /**
  * Subscription Service
- * 
+ *
  * This endpoint is used to get the subscribers of a specific channel.
- * 
+ *
  * @group Server API
  * @route GET /api/channels/:channel/subscribers
  * @param {string} req.params.channel - The channel to get subscribers for.
@@ -241,7 +242,7 @@ app.get("/api/clients/:clientId/subscriptions", async (req, res) => {
  */
 app.get("/api/channels/:channel/subscribers", async (req, res) => {
   const { channel } = req.params;
-  
+
   try {
     const subscribers = await subscriptionService.getChannelSubscribers(channel);
     res.json({ subscribers });
@@ -253,9 +254,9 @@ app.get("/api/channels/:channel/subscribers", async (req, res) => {
 
 /**
  * Subscription Service
- * 
+ *
  * This endpoint is used to check if a client is subscribed to a specific channel.
- * 
+ *
  * @group Server API
  * @route GET /api/clients/:clientId/channels/:channel
  * @param {string} req.params.clientId - The client ID to check subscription for.
@@ -265,7 +266,7 @@ app.get("/api/channels/:channel/subscribers", async (req, res) => {
  */
 app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
   const { clientId, channel } = req.params;
-  
+
   try {
     const isSubscribed = await subscriptionService.isSubscribed(clientId, channel);
     res.json({ isSubscribed });
@@ -277,9 +278,9 @@ app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
 
 /**
  * Access Control Service
- * 
+ *
  * This endpoint is used to generate a client ID.
- *      
+ *
  * @group Server API
  * @route POST /api/clients
  * @param {object} req.body.metadata - The metadata to generate the client ID with.
@@ -289,44 +290,44 @@ app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
 app.post("/api/clients", async (req, res) => {
   try {
     const { clientId, metadata } = req.body;
-    
+
     // If clientId is provided, validate it
     if (clientId) {
       const isValid = await accessControl.validateClientId(clientId);
       if (isValid) {
-        return res.status(200).json({ 
+        return res.status(200).json({
           clientId,
-          message: 'Client ID is valid'
+          message: "Client ID is valid",
         });
       }
     }
-    
+
     // Generate new client ID using provided clientId or generate a new one
     const newClientId = await accessControl.generateClientId(metadata, clientId);
-    res.status(201).json({ 
+    res.status(201).json({
       clientId: newClientId,
-      message: 'New client ID generated'
+      message: "New client ID generated",
     });
   } catch (error) {
-    console.error('Error in client ID generation:', error);
-    res.status(500).json({ 
-      error: 'Failed to generate client ID',
-      message: error instanceof Error ? error.message : 'Unknown error'
+    console.error("Error in client ID generation:", error);
+    res.status(500).json({
+      error: "Failed to generate client ID",
+      message: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
 
 /**
  * Access Control Service
- * 
+ *
  * This endpoint is used to validate a client ID.
- * 
+ *
  * @group Server API
  * @route GET /api/clients/:clientId
  * @param {string} req.params.clientId - The client ID to validate.
  * @returns {object} 200 - The validation status object.
  * @returns {object} 400 - The error object.
- */ 
+ */
 app.get("/api/clients/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
@@ -340,9 +341,9 @@ app.get("/api/clients/:clientId", async (req, res) => {
 
 /**
  * Access Control Service
- * 
+ *
  * This endpoint is used to create a channel.
- * 
+ *
  * @group Server API
  * @route POST /api/channels
  * @param {string} req.body.channel - The channel to create.
@@ -353,7 +354,7 @@ app.get("/api/clients/:clientId", async (req, res) => {
 app.post("/api/channels", async (req, res) => {
   try {
     const { channel, rules } = req.body;
-    
+
     if (!channel) {
       return res.status(400).json({ error: "Channel name is required" });
     }
@@ -361,9 +362,9 @@ app.post("/api/channels", async (req, res) => {
     // Check if channel exists
     const exists = await redisClient.exists(`channel:${channel}:rules`);
     if (exists) {
-      return res.status(409).json({ 
+      return res.status(409).json({
         error: "Channel already exists",
-        message: `Channel '${channel}' already exists`
+        message: `Channel '${channel}' already exists`,
       });
     }
 
@@ -377,9 +378,9 @@ app.post("/api/channels", async (req, res) => {
 
 /**
  * Access Control Service
- * 
+ *
  * This endpoint is used to grant access to a specific channel.
- * 
+ *
  * @group Server API
  * @route POST /api/channels/:channel/access/:clientId
  * @param {string} req.params.channel - The channel to grant access to.
@@ -390,7 +391,7 @@ app.post("/api/channels", async (req, res) => {
 app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
   try {
     const { channel, clientId } = req.params;
-    
+
     // First check if the channel exists
     const rules = await redisClient.hgetall(`channel:${channel}:rules`);
     if (!rules) {
@@ -403,7 +404,7 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
       allowedClientIds.push(clientId);
       await redisClient.hset(`channel:${channel}:rules`, {
         ...rules,
-        allowedClientIds: JSON.stringify(allowedClientIds)
+        allowedClientIds: JSON.stringify(allowedClientIds),
       });
     }
 
@@ -419,9 +420,9 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
 
 /**
  * Access Control Service
- * 
+ *
  * This endpoint is used to revoke access to a specific channel.
- * 
+ *
  * @group Server API
  * @route DELETE /api/channels/:channel/access/:clientId
  * @param {string} req.params.channel - The channel to revoke access from.
@@ -442,9 +443,9 @@ app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
 
 /**
  * Access Control Service
- * 
+ *
  * This endpoint is used to create a private channel.
- * 
+ *
  * @group Server API
  * @route POST /api/test/private-channel
  * @param {string} req.body.clientId - The client ID to create the private channel for.
@@ -454,7 +455,7 @@ app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
 app.post("/api/test/private-channel", async (req, res) => {
   try {
     const { clientId } = req.body;
-    
+
     if (!clientId) {
       return res.status(400).json({ error: "Client ID is required" });
     }
@@ -463,13 +464,13 @@ app.post("/api/test/private-channel", async (req, res) => {
     await accessControl.createChannel("private", {
       isPublic: false,
       allowedClientIds: [clientId],
-      maxSubscribers: 100
+      maxSubscribers: 100,
     });
 
-    res.json({ 
+    res.json({
       message: "Private channel created",
       channel: "private",
-      clientId
+      clientId,
     });
   } catch (error) {
     logger.error("Error creating private channel:", error);
@@ -481,7 +482,7 @@ app.post("/api/test/private-channel", async (req, res) => {
 app.delete("/api/channels/:channel", async (req, res) => {
   try {
     const { channel } = req.params;
-    
+
     if (!channel) {
       return res.status(400).json({ error: "Channel name is required" });
     }
@@ -489,15 +490,15 @@ app.delete("/api/channels/:channel", async (req, res) => {
     // Check if channel exists
     const exists = await redisClient.exists(`channel:${channel}:rules`);
     if (!exists) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: "Channel not found",
-        message: `Channel '${channel}' does not exist`
+        message: `Channel '${channel}' does not exist`,
       });
     }
 
     // Delete channel rules
     await redisClient.del(`channel:${channel}:rules`);
-    
+
     // Delete all subscriptions for this channel
     const subscribers = await redisClient.smembers(`channel:${channel}:subscribers`);
     for (const clientId of subscribers) {
@@ -505,9 +506,9 @@ app.delete("/api/channels/:channel", async (req, res) => {
     }
     await redisClient.del(`channel:${channel}:subscribers`);
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: `Channel '${channel}' deleted successfully`,
-      channel
+      channel,
     });
   } catch (error) {
     logger.error(`Error deleting channel: ${error}`);
@@ -519,42 +520,34 @@ app.delete("/api/channels/:channel", async (req, res) => {
 app.delete("/api/clients/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
-    
     // Check if client exists
-    const exists = await redisClient.exists(`client:${clientId}`);
+    const exists = await accessControl.validateClientId(clientId);
     if (!exists) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: "Client not found",
-        message: `Client '${clientId}' does not exist`
+        message: `Client '${clientId}' does not exist`,
       });
     }
 
     // Get all channels the client is subscribed to
-    const subscribedChannels = await redisClient.smembers(`client:${clientId}:channels`);
-    
+    const accessibleChannels = await accessControl.getAccessibleChannels(clientId);
+    // Remove client from all channel subscriber lists
+    for (const channel of accessibleChannels) {
+      await accessControl.revokeChannelAccess(clientId, channel);
+    }
+
+    // Get all channels the client is subscribed to
+    const subscribedChannels = await subscriptionService.getClientSubscriptions(clientId);
     // Remove client from all channel subscriber lists
     for (const channel of subscribedChannels) {
-      await redisClient.srem(`channel:${channel}:subscribers`, clientId);
+      await subscriptionService.unsubscribe(clientId, channel);
     }
-
-    // Get all channels the client has access to
-    const accessibleChannels = await redisClient.smembers(`client:${clientId}:accessible`);
-    
-    // Remove client from all channel access lists
-    for (const channel of accessibleChannels) {
-      await redisClient.srem(`channel:${channel}:allowed`, clientId);
-    }
-
-    // Delete client data
-    await redisClient.del(`client:${clientId}`);
-    await redisClient.del(`client:${clientId}:channels`);
-    await redisClient.del(`client:${clientId}:accessible`);
 
     res.status(200).json({
       message: `Client '${clientId}' deleted successfully`,
       clientId,
       deletedSubscriptions: subscribedChannels.length,
-      deletedChannels: accessibleChannels.length
+      deletedChannels: accessibleChannels.length,
     });
   } catch (error) {
     logger.error(`Error deleting client: ${error}`);
@@ -575,36 +568,36 @@ httpServer.listen(PORT, () => {
 });
 
 // Add WebSocket connection logging
-wss.on('listening', () => {
+wss.on("listening", () => {
   logger.info(`WebSocket server running on port ${WS_PORT}`);
 });
 
 // Handle WebSocket connections
-wss.on('connection', async (ws, req) => {
+wss.on("connection", async (ws, req) => {
   try {
     // Extract client ID from URL query parameters
-    const protocol = req.headers['x-forwarded-proto'] === 'https' ? 'wss' : 'ws';
-    const url = new URL(req.url || '', `${protocol}://${req.headers.host}`);
-    const clientId = url.searchParams.get('clientId');
-    
+    const protocol = req.headers["x-forwarded-proto"] === "https" ? "wss" : "ws";
+    const url = new URL(req.url || "", `${protocol}://${req.headers.host}`);
+    const clientId = url.searchParams.get("clientId");
+
     if (!clientId) {
-      logger.warn('WebSocket connection attempt without client ID');
-      ws.close(4000, 'Client ID is required');
+      logger.warn("WebSocket connection attempt without client ID");
+      ws.close(4000, "Client ID is required");
       return;
     }
 
     // Handle the connection with the client ID
     await wsManager.handleConnection(ws, clientId);
   } catch (error) {
-    logger.error('Error handling WebSocket connection:', error);
-    ws.close(4000, 'Connection error');
+    logger.error("Error handling WebSocket connection:", error);
+    ws.close(4000, "Connection error");
   }
 });
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
-  
+
   await redisClient.quit();
   httpServer.close(() => {
     logger.info("HTTP server closed");
@@ -617,7 +610,7 @@ async function initializeDemoChannel(): Promise<void> {
   try {
     await accessControl.createChannel("demo", {
       isPublic: true,
-      maxSubscribers: 1000
+      maxSubscribers: 1000,
     });
     logger.info("Demo channel initialized successfully");
   } catch (error) {
@@ -626,6 +619,6 @@ async function initializeDemoChannel(): Promise<void> {
 }
 
 // Initialize demo channel on startup
-initializeDemoChannel().catch(error => {
+initializeDemoChannel().catch((error) => {
   logger.error("Error during demo channel initialization:", error);
-}); 
+});
