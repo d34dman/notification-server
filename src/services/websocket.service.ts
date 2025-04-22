@@ -1,73 +1,43 @@
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocket } from "ws";
 import { Redis } from "ioredis";
 import { logger } from "../utils/logger";
 import { AccessControlService } from "./access-control.service";
 import { NotificationService } from "./notification.service";
-import { NotificationMessage, SubscriptionRequest } from "../types";
+import { SubscriptionService } from "./subscription.service";
 
 interface WebSocketClient {
   ws: WebSocket;
   clientId: string;
   subscribedChannels: Set<string>;
-  lastPing: number;
-  isAlive: boolean;
+  lastValidation: number;
 }
 
 export class WebSocketManager {
-  private wss: WebSocketServer;
-  private clients: Map<string, WebSocketClient>;
-  private pingInterval: NodeJS.Timeout | null = null;
-  private readonly PING_INTERVAL = 30000; // 30 seconds
-  private readonly PONG_TIMEOUT = 10000; // 10 seconds
+  private clients: Map<string, WebSocketClient> = new Map();
+  private readonly redis: Redis;
+  private readonly accessControl: AccessControlService;
+  private readonly notificationService: NotificationService;
+  private readonly subscriptionService: SubscriptionService;
+  private readonly validationInterval: number = 5 * 60 * 1000; // 5 minutes
 
   constructor(
-    private redis: Redis,
-    private accessControl: AccessControlService,
-    private notificationService: NotificationService
+    redis: Redis,
+    accessControl: AccessControlService,
+    notificationService: NotificationService,
+    subscriptionService: SubscriptionService
   ) {
     console.log("🟥 👻 WebSocketManager constructor");
-    this.clients = new Map();
-    this.wss = new WebSocketServer({ noServer: true });
-    this.setupWebSocketServer();
-    this.startPingInterval();
+    this.redis = redis;
+    this.accessControl = accessControl;
+    this.notificationService = notificationService;
+    this.subscriptionService = subscriptionService;
   }
 
-  private setupWebSocketServer(): void {
-    console.log("🟥 👻 setupWebSocketServer");
-    this.wss.on("connection", this.handleConnection.bind(this));
-    this.wss.on("error", this.handleServerError.bind(this));
-  }
-
-  private startPingInterval(): void { 
-    console.log("🟥 👻 startPingInterval");
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-    }
-    this.pingInterval = setInterval(() => {
-      this.checkConnections();
-    }, this.PING_INTERVAL);
-  }
-
-  private checkConnections(): void {
-    console.log("🟥 👻 checkConnections");
-    const now = Date.now();
-    for (const [clientId, client] of this.clients.entries()) {
-      if (!client.isAlive) {
-        logger.warn(`Client ${clientId} did not respond to ping, closing connection`);
-        this.closeClient(clientId, 1001, "No response to ping");
-        continue;
-      }
-
-      client.isAlive = false;
-      client.ws.ping();
-    }
-  }
-
-  private handleServerError(error: Error): void {
-    console.log("🟥 👻 handleServerError");
-    logger.error("WebSocket server error:", error);
-  }
-
+  /**
+   * Handles new WebSocket connections
+   * @param ws WebSocket connection
+   * @param clientId Client ID from query parameters
+   */
   public async handleConnection(ws: WebSocket, clientId: string): Promise<void> {
     console.log("🟥 👻 handleConnection");
     try {
@@ -75,262 +45,328 @@ export class WebSocketManager {
       const isValid = await this.accessControl.validateClientId(clientId);
       if (!isValid) {
         logger.warn(`Invalid client ID: ${clientId}`);
-        ws.close(1008, "Invalid client ID");
+        ws.close(4001, "Invalid client ID");
         return;
       }
 
-      // Create client record
+      // Create client record with validation timestamp
       const client: WebSocketClient = {
         ws,
         clientId,
         subscribedChannels: new Set(),
-        lastPing: Date.now(),
-        isAlive: true,
+        lastValidation: Date.now(),
       };
 
+      // Store client
       this.clients.set(clientId, client);
 
-      // Setup message handlers
-      ws.on("message", (data) => this.handleMessage(clientId, data));
-      ws.on("pong", () => this.handlePong(clientId));
-      ws.on("close", () => this.handleClose(clientId));
-      ws.on("error", (error) => this.handleError(clientId, error));
-
-      // Send connection success message
+      // Send connection confirmation
       ws.send(
         JSON.stringify({
           type: "connection",
-          status: "connected",
           clientId,
-          timestamp: new Date().toISOString(),
+          message: "Connected successfully",
         })
       );
 
       logger.info(`Client connected: ${clientId}`);
+
+      // Set up message handler
+      ws.on("message", (message: string) => this.handleMessage(ws, message));
+
+      // Set up close handler
+      ws.on("close", () => this.handleClientDisconnect(clientId));
+
+      // Set up periodic validation
+      this.setupValidationInterval(client);
     } catch (error) {
-      logger.error(`Error handling connection for client ${clientId}:`, error);
-      ws.close(1011, "Internal server error");
+      logger.error(`Connection error: ${error}`);
+      ws.close(4000, "Connection error");
     }
   }
 
-  private handlePong(clientId: string): void {
-    console.log("🟥 👻 handlePong");
-    const client = this.clients.get(clientId);
-    if (client) {
-      client.isAlive = true;
-      client.lastPing = Date.now();
-    }
+  /**
+   * Sets up periodic validation for a client
+   * @param client WebSocket client
+   */
+  private setupValidationInterval(client: WebSocketClient): void {
+    console.log("🟥 👻 setupValidationInterval");
+    const interval = setInterval(async () => {
+      try {
+        if (!this.clients.has(client.clientId)) {
+          clearInterval(interval);
+          return;
+        }
+
+        const isValid = await this.accessControl.validateClientId(client.clientId);
+        if (!isValid) {
+          logger.warn(`Client ID validation failed: ${client.clientId}`);
+          client.ws.close(4001, "Client ID validation failed");
+          this.handleClientDisconnect(client.clientId);
+          clearInterval(interval);
+        } else {
+          client.lastValidation = Date.now();
+        }
+      } catch (error) {
+        logger.error(`Validation error for client ${client.clientId}:`, error);
+      }
+    }, this.validationInterval);
   }
 
-  private async handleMessage(clientId: string, data: string | Buffer | ArrayBuffer | Buffer[]): Promise<void> {  
+  /**
+   * Handles incoming WebSocket messages
+   * @param ws WebSocket connection
+   * @param message Raw message string
+   */
+  private async handleMessage(ws: WebSocket, message: string): Promise<void> {
     console.log("🟥 👻 handleMessage");
     try {
-      const client = this.clients.get(clientId);
+      const data = JSON.parse(message);
+      const client = this.getClientByWebSocket(ws);
+
       if (!client) {
-        logger.warn(`Received message from unknown client: ${clientId}`);
+        logger.warn("Received message from unknown client");
         return;
       }
 
-      const message = JSON.parse(data.toString());
-      logger.debug(`Received message from client ${clientId}:`, message);
+      // Validate client ID before processing message
+      const isValid = await this.accessControl.validateClientId(client.clientId);
+      if (!isValid) {
+        logger.warn(`Invalid client ID during message handling: ${client.clientId}`);
+        ws.close(4001, "Invalid client ID");
+        return;
+      }
 
-      switch (message.type) {
-        case "subscribe":
-          await this.handleSubscribe(client, message);
-          break;
-        case "unsubscribe":
-          await this.handleUnsubscribe(client, message);
-          break;
-        case "ping":
-          client.ws.pong();
-          break;
-        default:
-          logger.warn(`Unknown message type from client ${clientId}: ${message.type}`);
+      client.lastValidation = Date.now();
+      logger.debug("Received WebSocket message:", { data, clientId: client.clientId });
+
+      // Handle both "subscription" and direct "subscribe"/"unsubscribe" message types
+      if (
+        data.type === "subscription" ||
+        data.type === "subscribe" ||
+        data.type === "unsubscribe"
+      ) {
+        const action = data.type === "subscription" ? data.action : data.type;
+        const channel = data.channel;
+
+        logger.debug("Processing subscription message:", {
+          action,
+          channel,
+          clientId: client.clientId,
+        });
+
+        await this.handleSubscription(client, {
+          action,
+          channel,
+        });
+      } else {
+        logger.warn(`Unknown message type: ${data.type}`, { data });
       }
     } catch (error) {
-      logger.error(`Error handling message from client ${clientId}:`, error);
-      this.sendError(clientId, "Invalid message format");
+      logger.error(`Message handling error: ${error}`);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Invalid message format",
+          })
+        );
+      }
     }
   }
 
-  private async handleSubscribe(
+  /**
+   * Handles subscription requests
+   * @param client WebSocket client
+   * @param data Subscription request data
+   */
+  private async handleSubscription(
     client: WebSocketClient,
-    message: SubscriptionRequest
+    data: { action: string; channel: string }
   ): Promise<void> {
-    console.log("🟥 👻 handleSubscribe");
+    console.log("🟥 👻 handleSubscription");
+    const { action, channel } = data;
+
     try {
-      const { channel } = message;
+      logger.debug("Checking channel access:", { clientId: client.clientId, channel });
 
       // Check channel access
       const hasAccess = await this.accessControl.hasChannelAccess(client.clientId, channel);
+      logger.debug("Channel access check result:", {
+        hasAccess,
+        clientId: client.clientId,
+        channel,
+      });
+
       if (!hasAccess) {
-        this.sendError(client.clientId, `Access denied to channel: ${channel}`);
+        client.ws.send(
+          JSON.stringify({
+            type: "error",
+            message: `Access denied to channel: ${channel}`,
+          })
+        );
         return;
       }
 
-      // Subscribe to channel
-      await this.redis.sadd(`channel:${channel}:subscribers`, client.clientId);
-      await this.redis.sadd(`client:${client.clientId}:channels`, channel);
-      client.subscribedChannels.add(channel);
-
-      // Send subscription success message
-      client.ws.send(
-        JSON.stringify({
-          type: "subscription",
-          status: "subscribed",
-          channel,
-          timestamp: new Date().toISOString(),
-        })
-      );
-
-      logger.info(`Client ${client.clientId} subscribed to channel: ${channel}`);
-    } catch (error) {
-      logger.error(`Error handling subscription for client ${client.clientId}:`, error);
-      this.sendError(client.clientId, "Failed to subscribe to channel");
-    }
-  }
-
-  private async handleUnsubscribe(
-    client: WebSocketClient,
-    message: SubscriptionRequest
-  ): Promise<void> {
-    console.log("🟥 👻 handleUnsubscribe");
-    try {
-      const { channel } = message;
-
-      // Unsubscribe from channel
-      await this.redis.srem(`channel:${channel}:subscribers`, client.clientId);
-      await this.redis.srem(`client:${client.clientId}:channels`, channel);
-      client.subscribedChannels.delete(channel);
-
-      // Send unsubscription success message
-      client.ws.send(
-        JSON.stringify({
-          type: "subscription",
-          status: "unsubscribed",
-          channel,
-          timestamp: new Date().toISOString(),
-        })
-      );
-
-      logger.info(`Client ${client.clientId} unsubscribed from channel: ${channel}`);
-    } catch (error) {
-      logger.error(`Error handling unsubscription for client ${client.clientId}:`, error);
-      this.sendError(client.clientId, "Failed to unsubscribe from channel");
-    }
-  }
-
-  private async handleClose(clientId: string): Promise<void> {
-    console.log("🟥 👻 handleClose");
-    try {
-      const client = this.clients.get(clientId);
-      if (!client) return;
-
-      // Unsubscribe from all channels
-      for (const channel of client.subscribedChannels) {
-        await this.redis.srem(`channel:${channel}:subscribers`, clientId);
-        await this.redis.srem(`client:${clientId}:channels`, channel);
+      if (action === "subscribe") {
+        await this.subscribeToChannel(client, channel);
+      } else if (action === "unsubscribe") {
+        await this.unsubscribeFromChannel(client, channel);
       }
-
-      this.clients.delete(clientId);
-      logger.info(`Client disconnected: ${clientId}`);
     } catch (error) {
-      logger.error(`Error handling client disconnect: ${clientId}`, error);
-    }
-  }
-
-  private handleError(clientId: string, error: Error): void {
-    console.log("🟥 👻 handleError");
-    logger.error(`WebSocket error for client ${clientId}:`, error);
-    this.closeClient(clientId, 1011, "Internal server error");
-  }
-
-  private closeClient(clientId: string, code: number, reason: string): void { 
-    console.log("🟥 👻 closeClient");
-    const client = this.clients.get(clientId);
-    if (client) {
-      client.ws.close(code, reason);
-      this.clients.delete(clientId);
-    }
-  }
-
-  private sendError(clientId: string, message: string): void {
-    console.log("🟥 👻 sendError");
-    const client = this.clients.get(clientId);
-    if (client) {
+      logger.error(`Subscription error: ${error}`);
       client.ws.send(
         JSON.stringify({
           type: "error",
-          message,
-          timestamp: new Date().toISOString(),
+          message: "Subscription error",
         })
       );
     }
   }
 
-  public async broadcastNotification(channel: string, notification: NotificationMessage): Promise<void> {
+  /**
+   * Subscribes a client to a channel
+   * @param client WebSocket client
+   * @param channel Channel name
+   */
+  private async subscribeToChannel(client: WebSocketClient, channel: string): Promise<void> {
+    console.log("🟥 👻 subscribeToChannel");
+    try {
+      // Use subscription service to manage subscriptions
+      await this.subscriptionService.subscribe(client.clientId, channel);
+
+      // Update local state
+      client.subscribedChannels.add(channel);
+
+      client.ws.send(
+        JSON.stringify({
+          type: "subscription",
+          action: "subscribed",
+          channel,
+        })
+      );
+
+      logger.info(`Client ${client.clientId} subscribed to channel ${channel}`);
+    } catch (error) {
+      logger.error(`Error subscribing client ${client.clientId} to channel ${channel}:`, error);
+      client.ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Failed to subscribe to channel",
+        })
+      );
+    }
+  }
+
+  /**
+   * Unsubscribes a client from a channel
+   * @param client WebSocket client
+   * @param channel Channel name
+   */
+  private async unsubscribeFromChannel(client: WebSocketClient, channel: string): Promise<void> {
+    console.log("🟥 👻 unsubscribeFromChannel");
+    try {
+      // Use subscription service to manage subscriptions
+      await this.subscriptionService.unsubscribe(client.clientId, channel);
+
+      // Update local state
+      client.subscribedChannels.delete(channel);
+
+      client.ws.send(
+        JSON.stringify({
+          type: "subscription",
+          action: "unsubscribed",
+          channel,
+        })
+      );
+
+      logger.info(`Client ${client.clientId} unsubscribed from channel ${channel}`);
+    } catch (error) {
+      logger.error(`Error unsubscribing client ${client.clientId} from channel ${channel}:`, error);
+      client.ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Failed to unsubscribe from channel",
+        })
+      );
+    }
+  }
+
+  /**
+   * Handles client disconnection
+   * @param clientId Client ID
+   */
+  private async handleClientDisconnect(clientId: string): Promise<void> {
+    console.log("🟥 👻 handleClientDisconnect");
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      // Unsubscribe from all channels using subscription service
+      for (const channel of client.subscribedChannels) {
+        await this.subscriptionService.unsubscribe(clientId, channel);
+      }
+
+      // Remove client from local state
+      this.clients.delete(clientId);
+      logger.info(`Client disconnected: ${clientId}`);
+    } catch (error) {
+      logger.error(`Error handling client disconnect for ${clientId}:`, error);
+    }
+  }
+
+  /**
+   * Gets client by WebSocket instance
+   * @param ws WebSocket instance
+   * @returns WebSocket client or undefined
+   */
+  private getClientByWebSocket(ws: WebSocket): WebSocketClient | undefined {
+    console.log("🟥 👻 getClientByWebSocket");
+    for (const client of this.clients.values()) {
+      if (client.ws === ws) {
+        return client;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Broadcasts a notification to all subscribers of a channel
+   * @param channel Channel name
+   * @param notification Notification data
+   */
+  public async broadcastNotification(channel: string, notification: unknown): Promise<void> {
     console.log("🟥 👻 broadcastNotification");
     try {
-      console.log("Broadcasting notification to channel:", channel);
-      console.log(`SMEMBERS subscription:${channel}`);
-      // Get all subscribers for the channel
-      const subscribers = await this.redis.smembers(`subscription:${channel}`);
-      logger.debug(`Broadcasting notification to ${subscribers.length} subscribers in channel ${channel}`);
-      console.log("Subscribers:", subscribers);
-      // Send notification to each subscribed client
+      const subscribers = await this.subscriptionService.getChannelSubscribers(channel);
+      console.log("🟥 👻 broadcastNotification:subscribers", subscribers);
       for (const clientId of subscribers) {
+        // Check if client still has access to the channel
+        const hasAccess = await this.accessControl.hasChannelAccess(clientId, channel);
+        if (!hasAccess) {
+          console.log("🟥 👻 broadcastNotification:unsubscribe");
+          // Remove client from subscribers if they no longer have access
+          await this.subscriptionService.unsubscribe(clientId, channel);
+          logger.warn(
+            `Removed client ${clientId} from channel ${channel} subscribers due to revoked access`
+          );
+          continue;
+        }
+
         const client = this.clients.get(clientId);
-        if (client && client.subscribedChannels.has(channel)) {
-          try {
-            client.ws.send(JSON.stringify({
+        if (client && client.ws.readyState === WebSocket.OPEN) {
+          console.log("🟥 👻 broadcastNotification:send", clientId);
+          client.ws.send(
+            JSON.stringify({
               type: "notification",
-              data: notification
-            }));
-            logger.debug(`Sent notification to client ${clientId} in channel ${channel}`);
-          } catch (error) {
-            logger.error(`Error sending notification to client ${clientId}:`, error);
-            // If there's an error sending to a client, remove them from the channel
-            await this.handleUnsubscribe(client, { type: "unsubscribe", channel });
-          }
+              channel,
+              data: notification,
+            })
+          );
         }
       }
     } catch (error) {
       logger.error(`Error broadcasting notification to channel ${channel}:`, error);
-      throw error;
     }
-  }
-
-  public getClientCount(): number {
-    console.log("🟥 👻 getClientCount");
-    return this.clients.size;
-  }
-
-  public getSubscribedChannels(clientId: string): string[] {
-    console.log("🟥 👻 getSubscribedChannels");
-    const client = this.clients.get(clientId);
-    return client ? Array.from(client.subscribedChannels) : [];
-  }
-
-  public cleanup(): void {
-    console.log("🟥 👻 cleanup");
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-    }
-    for (const [clientId] of this.clients.entries()) {
-      this.closeClient(clientId, 1001, "Server shutting down");
-    }
-    this.wss.close();
-  }
-
-  public handleUpgrade(
-    request: any,
-    socket: any,
-    head: any,
-    clientId: string
-  ): void {
-    console.log("🟥 👻 handleUpgrade"); 
-    this.wss.handleUpgrade(request, socket, head, (ws) => {
-      this.wss.emit("connection", ws, clientId);
-    });
   }
 }

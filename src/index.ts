@@ -26,7 +26,7 @@ const httpServer = createServer(app);
 
 // Create WebSocket server with CORS configuration
 const wss = new WebSocketServer({
-  server: httpServer,
+  port: parseInt(process.env.WS_PORT || "8080", 10),
   verifyClient: (info, callback) => {
     const origin = info.origin || info.req.headers.origin;
     const allowedOrigin = process.env.CORS_ORIGIN || "*";
@@ -51,7 +51,8 @@ const accessControl = new AccessControlService(redisClient, clientIdExpiration);
 const wsManager = new WebSocketManager(
   redisClient,
   accessControl,
-  notificationService
+  notificationService,
+  subscriptionService
 );
 
 // Middleware
@@ -74,10 +75,6 @@ app.use(
 
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
 // Routes
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
@@ -97,17 +94,16 @@ app.get("/api/health", (req, res) => {
  */
 app.post("/api/notifications", async (req, res) => {
   try {
-    console.log("Notification Service");
     const { channel, message } = req.body;
 
     if (!channel || !message) {
       return res.status(400).json({ error: "Channel and message are required" });
     }
 
-    // If channel doesn't exist, return 404
-    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    // Check if channel exists
+    const exists = await accessControl.validateChannel(channel);
     if (!exists) {
-      return res.status(404).json({ error: "Channel does not exist" });
+      return res.status(404).json({ error: "Channel not found" });
     }
 
     const notification = {
@@ -117,15 +113,11 @@ app.post("/api/notifications", async (req, res) => {
       timestamp: Date.now(),
     };
 
-
     // Store notification
     await notificationService.storeNotification(notification);
 
     // Broadcast to subscribers
     await wsManager.broadcastNotification(channel, notification);
-
-    console.log(notification);
-    console.log("Notification Service done");
 
     res.json(notification);
   } catch (error) {
@@ -150,12 +142,11 @@ app.get("/api/notifications/:channel", async (req, res) => {
   try {
     const { channel } = req.params;
     const { limit = 10 } = req.query;
-
-    // If channel doesn't exist, return 404
-    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    // First check if the channel exists
+    const exists = await accessControl.validateChannel(channel);
     if (!exists) {
-      return res.status(404).json({ error: "Channel does not exist" });
-    }
+      return res.status(404).json({ error: "Channel not found" });
+    } 
 
     const notifications = await notificationService.getNotifications(channel, Number(limit));
 
@@ -182,15 +173,14 @@ app.get("/api/notifications/:channel", async (req, res) => {
 app.post("/api/channels/:channel/subscribe", async (req, res) => {
   const { channel } = req.params;
   const { clientId } = req.body;
+  // First check if the channel exists
+  const exists = await accessControl.validateChannel(channel);
+  if (!exists) {
+    return res.status(404).json({ error: "Channel not found" });
+  } 
 
   if (!clientId) {
     return res.status(400).json({ error: "Client ID is required" });
-  }
-
-  // If channel doesn't exist, return 404
-  const exists = await redisClient.exists(`channel:${channel}:rules`);
-  if (!exists) {
-    return res.status(404).json({ error: "Channel does not exist" });
   }
 
   try {
@@ -385,8 +375,9 @@ app.post("/api/channels", async (req, res) => {
       return res.status(400).json({ error: "Channel name is required" });
     }
 
+
     // Check if channel exists
-    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    const exists = await accessControl.validateChannel(channel);
     if (exists) {
       return res.status(409).json({
         error: "Channel already exists",
@@ -419,14 +410,17 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
     const { channel, clientId } = req.params;
 
     // First check if the channel exists
-    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    const exists = await accessControl.validateChannel(channel);
     if (!exists) {
       return res.status(404).json({ error: "Channel not found" });
-    }
+    } 
 
-    const rules = await redisClient.hgetall(`channel:${channel}:rules`);
+    // Get the rules for the channel
+    const rules = await accessControl.getChannelRules(channel);
+
+    // Return 400 for public channels
     if (rules.isPublic == "1") {
-      return res.status(400).json({ error: "Clients cannot be added to public channels" });
+      return res.status(400).json({ error: "Public channel" });
     }
 
     // Add client to channel's allowed clients
@@ -466,16 +460,18 @@ app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
     const { channel, clientId } = req.params;
 
     // First check if the channel exists
-    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    const exists = await accessControl.validateChannel(channel);
     if (!exists) {
       return res.status(404).json({ error: "Channel not found" });
-    }
+    } 
 
-    const rules = await redisClient.hgetall(`channel:${channel}:rules`);
+    // Get the rules for the channel
+    const rules = await accessControl.getChannelRules(channel);
+
+    // Return 400 for public channels
     if (rules.isPublic == "1") {
-      return res.status(400).json({ error: "Clients cannot be deleted from public channels" });
+      return res.status(400).json({ error: "Public channel" });
     }
-
     await accessControl.revokeChannelAccess(clientId, channel);
     res.json({ channel, clientId, accessRevoked: true });
   } catch (error) {
@@ -613,45 +609,38 @@ const WS_PORT = parseInt(process.env.WS_PORT || "8080", 10);
 
 // Start HTTP server
 httpServer.listen(PORT, () => {
-  console.log("🟪 👻 httpServer.listen");
   logger.info(`HTTP server running on port ${PORT}`);
 });
 
 // Add WebSocket connection logging
 wss.on("listening", () => {
-  console.log("🟫 👻 wss.on('listening')");
   logger.info(`WebSocket server running on port ${WS_PORT}`);
 });
 
-// Handle WebSocket connections directly
-wss.on("connection", async (ws, request) => {
+// Handle WebSocket connections
+wss.on("connection", async (ws, req) => {
   try {
-    const url = new URL(request.url || "", `http://${request.headers.host}`);
+    // Extract client ID from URL query parameters
+    const protocol = req.headers["x-forwarded-proto"] === "https" ? "wss" : "ws";
+    const url = new URL(req.url || "", `${protocol}://${req.headers.host}`);
     const clientId = url.searchParams.get("clientId");
 
     if (!clientId) {
-      ws.close(401, "Client ID is required");
+      logger.warn("WebSocket connection attempt without client ID");
+      ws.close(4000, "Client ID is required");
       return;
     }
 
-    // Validate client ID
-    const isValid = await accessControl.validateClientId(clientId);
-    if (!isValid) {
-      ws.close(401, "Invalid client ID");
-      return;
-    }
-
-    // Handle WebSocket connection
-    wsManager.handleConnection(ws, clientId);
+    // Handle the connection with the client ID
+    await wsManager.handleConnection(ws, clientId);
   } catch (error) {
-    logger.error("WebSocket connection error:", error);
-    ws.close(500, "Internal server error");
+    logger.error("Error handling WebSocket connection:", error);
+    ws.close(4000, "Connection error");
   }
 });
 
 // Graceful shutdown
-process.on("SIGTERM", async () => { 
-  console.log("🟥 👻 process.on('SIGTERM')");
+process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
 
   await redisClient.quit();

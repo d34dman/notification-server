@@ -46,6 +46,16 @@ export class AccessControlService {
   }
 
   /**
+   * Gets the rules for a channel
+   * @param channel Channel name
+   * @returns Channel rules
+   */
+  public async getChannelRules(channel: string): Promise<any> {
+    const rules = await this.redis.hgetall(`channel:${channel}:rules`);
+    return rules;
+  }
+
+  /**
    * Refreshes the expiration time for a client ID
    * @param clientId Client ID to refresh
    */
@@ -70,6 +80,16 @@ export class AccessControlService {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Validates if a channel exists
+   * @param channel Channel name to validate
+   * @returns True if channel exists
+   */
+  public async validateChannel(channel: string): Promise<boolean> {
+    const exists = await this.redis.exists(`channel:${channel}:rules`);
+    return exists === 1;
   }
 
   /**
