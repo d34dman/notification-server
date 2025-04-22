@@ -1,5 +1,6 @@
 import request from "supertest";
 import { testConfig } from "./jest.setup";
+import { logger } from "../utils/logger";
 
 export const TEST_PREFIX = "__TEST__:";
 
@@ -36,21 +37,35 @@ export const TEST_DATA = {
 export async function cleanupTestData() {
   try {
     // Delete test channels
+    logger.debug(`[TEST] Deleting test channel: ${TEST_DATA.channels.public.channel}`);
     await request(testConfig.API_URL)
       .delete(`/api/channels/${TEST_DATA.channels.public.channel}`)
       .expect(200);
+    logger.debug(`[TEST] Deleting test channel: ${TEST_DATA.channels.private.channel}`);
     await request(testConfig.API_URL)
       .delete(`/api/channels/${TEST_DATA.channels.private.channel}`)
       .expect(200);
 
     // Delete test clients
+    logger.debug(`[TEST] Deleting test client: ${TEST_DATA.clients.clientA}`);
     await request(testConfig.API_URL)
       .delete(`/api/clients/${TEST_DATA.clients.clientA}`)
-      .expect(200);
+      .expect((res) => {
+        if (res.status !== 200 && res.status !== 476 && res.status !== 404) {
+          throw new Error(`Expected status 200, 476, or 404, got ${res.status}`);
+        }
+      });
+    logger.debug(`[TEST] Deleting test client: ${TEST_DATA.clients.clientB}`);  
     await request(testConfig.API_URL)
       .delete(`/api/clients/${TEST_DATA.clients.clientB}`)
-      .expect(200);
-  } catch (error) {
+      .expect((res) => {
+        if (res.status !== 200 && res.status !== 476 && res.status !== 404) {
+          throw new Error(`Expected status 200, 476, or 404, got ${res.status}`);
+        }
+      });
+
+  } 
+  catch (error) {
     console.error("Error during cleanup:", error);
   }
 }

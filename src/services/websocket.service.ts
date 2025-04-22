@@ -26,7 +26,7 @@ export class WebSocketManager {
     notificationService: NotificationService,
     subscriptionService: SubscriptionService
   ) {
-    console.log("🟥 👻 WebSocketManager constructor");
+    logger.debug("[WS] WebSocketManager initialized");
     this.redis = redis;
     this.accessControl = accessControl;
     this.notificationService = notificationService;
@@ -39,7 +39,7 @@ export class WebSocketManager {
    * @param clientId Client ID from query parameters
    */
   public async handleConnection(ws: WebSocket, clientId: string): Promise<void> {
-    console.log("🟥 👻 handleConnection");
+    logger.debug("[WS] Handling new WebSocket connection");
     try {
       // Validate client ID
       const isValid = await this.accessControl.validateClientId(clientId);
@@ -90,7 +90,7 @@ export class WebSocketManager {
    * @param client WebSocket client
    */
   private setupValidationInterval(client: WebSocketClient): void {
-    console.log("🟥 👻 setupValidationInterval");
+    logger.debug("[WS] Setting up client validation interval");
     const interval = setInterval(async () => {
       try {
         if (!this.clients.has(client.clientId)) {
@@ -119,7 +119,7 @@ export class WebSocketManager {
    * @param message Raw message string
    */
   private async handleMessage(ws: WebSocket, message: string): Promise<void> {
-    console.log("🟥 👻 handleMessage");
+    logger.debug("[WS] Processing WebSocket message");
     try {
       const data = JSON.parse(message);
       const client = this.getClientByWebSocket(ws);
@@ -149,11 +149,7 @@ export class WebSocketManager {
         const action = data.type === "subscription" ? data.action : data.type;
         const channel = data.channel;
 
-        logger.debug("Processing subscription message:", {
-          action,
-          channel,
-          clientId: client.clientId,
-        });
+        logger.debug("[WS] Processing subscription request");
 
         await this.handleSubscription(client, {
           action,
@@ -184,7 +180,7 @@ export class WebSocketManager {
     client: WebSocketClient,
     data: { action: string; channel: string }
   ): Promise<void> {
-    console.log("🟥 👻 handleSubscription");
+    logger.debug("[WS] Processing subscription request");
     const { action, channel } = data;
 
     try {
@@ -230,7 +226,7 @@ export class WebSocketManager {
    * @param channel Channel name
    */
   private async subscribeToChannel(client: WebSocketClient, channel: string): Promise<void> {
-    console.log("🟥 👻 subscribeToChannel");
+    logger.debug("[WS] Subscribing client to channel");
     try {
       // Use subscription service to manage subscriptions
       await this.subscriptionService.subscribe(client.clientId, channel);
@@ -264,7 +260,7 @@ export class WebSocketManager {
    * @param channel Channel name
    */
   private async unsubscribeFromChannel(client: WebSocketClient, channel: string): Promise<void> {
-    console.log("🟥 👻 unsubscribeFromChannel");
+    logger.debug("[WS] Unsubscribing client from channel");
     try {
       // Use subscription service to manage subscriptions
       await this.subscriptionService.unsubscribe(client.clientId, channel);
@@ -297,7 +293,7 @@ export class WebSocketManager {
    * @param clientId Client ID
    */
   private async handleClientDisconnect(clientId: string): Promise<void> {
-    console.log("🟥 👻 handleClientDisconnect");
+    logger.debug("[WS] Handling client disconnect");
     const client = this.clients.get(clientId);
     if (!client) return;
 
@@ -321,7 +317,7 @@ export class WebSocketManager {
    * @returns WebSocket client or undefined
    */
   private getClientByWebSocket(ws: WebSocket): WebSocketClient | undefined {
-    console.log("🟥 👻 getClientByWebSocket");
+    logger.debug("[WS] Retrieving client by WebSocket");
     for (const client of this.clients.values()) {
       if (client.ws === ws) {
         return client;
@@ -336,15 +332,15 @@ export class WebSocketManager {
    * @param notification Notification data
    */
   public async broadcastNotification(channel: string, notification: unknown): Promise<void> {
-    console.log("🟥 👻 broadcastNotification");
+    logger.debug("[WS] Broadcasting notification to channel");
     try {
       const subscribers = await this.subscriptionService.getChannelSubscribers(channel);
-      console.log("🟥 👻 broadcastNotification:subscribers", subscribers);
+      logger.debug("[WS] Found subscribers for channel: ${subscribers.length}");
       for (const clientId of subscribers) {
         // Check if client still has access to the channel
         const hasAccess = await this.accessControl.hasChannelAccess(clientId, channel);
         if (!hasAccess) {
-          console.log("🟥 👻 broadcastNotification:unsubscribe");
+          logger.debug("[WS] Unsubscribing client from channel");
           // Remove client from subscribers if they no longer have access
           await this.subscriptionService.unsubscribe(clientId, channel);
           logger.warn(
@@ -355,7 +351,7 @@ export class WebSocketManager {
 
         const client = this.clients.get(clientId);
         if (client && client.ws.readyState === WebSocket.OPEN) {
-          console.log("🟥 👻 broadcastNotification:send", clientId);
+          logger.debug("[WS] Sending notification to client: ${clientId}");
           client.ws.send(
             JSON.stringify({
               type: "notification",

@@ -15,14 +15,30 @@ import { validateEnv } from "./utils/env";
 import { AccessControlService } from "./services/access-control.service";
 
 // Load environment variables
-dotenv.config();
+const envLoaded = dotenv.config();
+if (!envLoaded) {
+  logger.error("❌ Failed to load environment variables");
+  process.exit(1);
+}
+logger.debug("[ENV] Environment variables loaded successfully");
 
 // Validate environment variables
-validateEnv();
+try {
+  validateEnv();
+  logger.debug("[ENV] Environment variables validated successfully");
+} catch (error) {
+  logger.error("❌ Environment validation failed:", error);
+  process.exit(1);
+}
+
+// Set logger level
+logger.level = process.env.LOG_LEVEL || "info";
+logger.debug(`[LOGGER] Log level set to: ${logger.level}`);
 
 // Create Express app
 const app = express();
 const httpServer = createServer(app);
+logger.debug("[SERVER] Express app and HTTP server initialized");
 
 // Create WebSocket server with CORS configuration
 const wss = new WebSocketServer({
@@ -39,9 +55,16 @@ const wss = new WebSocketServer({
     }
   },
 });
+logger.debug(`[WS] WebSocket server initialized on port ${process.env.WS_PORT || "8080"}`);
 
 // Create Redis client
 const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+
+// Initialize Redis connection
+const initializeRedis = async () => {
+  await redisClient.connect();
+  logger.debug(`[REDIS] Connected to ${process.env.REDIS_URL || "redis://localhost:6379"}`);
+};
 
 // Create services
 const notificationService = new NotificationService(redisClient);
@@ -54,6 +77,7 @@ const wsManager = new WebSocketManager(
   notificationService,
   subscriptionService
 );
+logger.debug("[SERVICES] All services initialized successfully");
 
 // Middleware
 app.use(
@@ -77,6 +101,7 @@ app.use(express.json());
 
 // Routes
 app.get("/api/health", (req, res) => {
+  logger.debug("[API] Health check requested");
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
@@ -93,6 +118,7 @@ app.get("/api/health", (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/notifications", async (req, res) => {
+  logger.debug("[API] New notification request received");
   try {
     const { channel, message } = req.body;
 
@@ -139,6 +165,7 @@ app.post("/api/notifications", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.get("/api/notifications/:channel", async (req, res) => {
+  logger.debug(`[API] Get notifications request for channel: ${req.params.channel}`);
   try {
     const { channel } = req.params;
     const { limit = 10 } = req.query;
@@ -171,6 +198,7 @@ app.get("/api/notifications/:channel", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/channels/:channel/subscribe", async (req, res) => {
+  logger.debug(`[API] Subscribe request for channel: ${req.params.channel}`);
   const { channel } = req.params;
   const { clientId } = req.body;
   // First check if the channel exists
@@ -206,6 +234,7 @@ app.post("/api/channels/:channel/subscribe", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/channels/:channel/unsubscribe", async (req, res) => {
+  logger.debug(`[API] Unsubscribe request for channel: ${req.params.channel}`);
   const { channel } = req.params;
   const { clientId } = req.body;
 
@@ -234,6 +263,7 @@ app.post("/api/channels/:channel/unsubscribe", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.get("/api/clients/:clientId/subscriptions", async (req, res) => {
+  logger.debug(`[API] Get subscriptions request for client: ${req.params.clientId}`);
   const { clientId } = req.params;
 
   try {
@@ -257,6 +287,7 @@ app.get("/api/clients/:clientId/subscriptions", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.get("/api/channels/:channel/subscribers", async (req, res) => {
+  logger.debug(`[API] Get subscribers request for channel: ${req.params.channel}`);
   const { channel } = req.params;
 
   try {
@@ -281,6 +312,7 @@ app.get("/api/channels/:channel/subscribers", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
+  logger.debug(`[API] Check access request for client: ${req.params.clientId}, channel: ${req.params.channel}`);
   const { clientId, channel } = req.params;
 
   try {
@@ -304,6 +336,7 @@ app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/clients", async (req, res) => {
+  logger.debug("[API] Create client request received");
   try {
     const { clientId, metadata } = req.body;
 
@@ -345,6 +378,7 @@ app.post("/api/clients", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.get("/api/clients/:clientId", async (req, res) => {
+  logger.debug(`[API] Get client request for ID: ${req.params.clientId}`);
   try {
     const { clientId } = req.params;
     const isValid = await accessControl.validateClientId(clientId);
@@ -368,6 +402,7 @@ app.get("/api/clients/:clientId", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/channels", async (req, res) => {
+  logger.debug("[API] Create channel request received");
   try {
     const { channel, rules } = req.body;
 
@@ -406,6 +441,7 @@ app.post("/api/channels", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
+  logger.debug("[API] Channel access request received for channel: ${req.params.channel}, client: ${req.params.clientId}");
   try {
     const { channel, clientId } = req.params;
 
@@ -456,6 +492,7 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
+  logger.debug("[API] Channel deletion request received for channel: ${req.params.channel}");
   try {
     const { channel, clientId } = req.params;
 
@@ -492,6 +529,7 @@ app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/test/private-channel", async (req, res) => {
+  logger.debug("[API] Test private channel request received");
   try {
     const { clientId } = req.body;
 
@@ -519,6 +557,7 @@ app.post("/api/test/private-channel", async (req, res) => {
 
 // Delete channel endpoint
 app.delete("/api/channels/:channel", async (req, res) => {
+  logger.debug("[API] Channel deletion request received for channel: ${req.params.channel}");
   try {
     const { channel } = req.params;
 
@@ -560,6 +599,7 @@ app.delete("/api/channels/:channel", async (req, res) => {
 
 // Client Management
 app.delete("/api/clients/:clientId", async (req, res) => {
+  logger.debug(`[API] Delete client request for ID: ${req.params.clientId}`);
   try {
     const { clientId } = req.params;
     // Check if client exists
