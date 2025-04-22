@@ -26,7 +26,7 @@ const httpServer = createServer(app);
 
 // Create WebSocket server with CORS configuration
 const wss = new WebSocketServer({
-  port: parseInt(process.env.WS_PORT || "8080", 10),
+  server: httpServer,
   verifyClient: (info, callback) => {
     const origin = info.origin || info.req.headers.origin;
     const allowedOrigin = process.env.CORS_ORIGIN || "*";
@@ -74,6 +74,10 @@ app.use(
 
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // Routes
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
@@ -93,6 +97,7 @@ app.get("/api/health", (req, res) => {
  */
 app.post("/api/notifications", async (req, res) => {
   try {
+    console.log("Notification Service");
     const { channel, message } = req.body;
 
     if (!channel || !message) {
@@ -112,11 +117,15 @@ app.post("/api/notifications", async (req, res) => {
       timestamp: Date.now(),
     };
 
+
     // Store notification
     await notificationService.storeNotification(notification);
 
     // Broadcast to subscribers
     await wsManager.broadcastNotification(channel, notification);
+
+    console.log(notification);
+    console.log("Notification Service done");
 
     res.json(notification);
   } catch (error) {
@@ -604,45 +613,45 @@ const WS_PORT = parseInt(process.env.WS_PORT || "8080", 10);
 
 // Start HTTP server
 httpServer.listen(PORT, () => {
+  console.log("🟪 👻 httpServer.listen");
   logger.info(`HTTP server running on port ${PORT}`);
 });
 
 // Add WebSocket connection logging
 wss.on("listening", () => {
+  console.log("🟫 👻 wss.on('listening')");
   logger.info(`WebSocket server running on port ${WS_PORT}`);
 });
 
-// WebSocket upgrade handler
-wss.on("upgrade", async (request, socket, head) => {
+// Handle WebSocket connections directly
+wss.on("connection", async (ws, request) => {
   try {
     const url = new URL(request.url || "", `http://${request.headers.host}`);
     const clientId = url.searchParams.get("clientId");
 
     if (!clientId) {
-      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-      socket.destroy();
+      ws.close(401, "Client ID is required");
       return;
     }
 
     // Validate client ID
     const isValid = await accessControl.validateClientId(clientId);
     if (!isValid) {
-      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-      socket.destroy();
+      ws.close(401, "Invalid client ID");
       return;
     }
 
-    // Handle WebSocket upgrade
-    wsManager.handleUpgrade(request, socket, head, clientId);
+    // Handle WebSocket connection
+    wsManager.handleConnection(ws, clientId);
   } catch (error) {
-    logger.error("WebSocket upgrade error:", error);
-    socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
-    socket.destroy();
+    logger.error("WebSocket connection error:", error);
+    ws.close(500, "Internal server error");
   }
 });
 
 // Graceful shutdown
-process.on("SIGTERM", async () => {
+process.on("SIGTERM", async () => { 
+  console.log("🟥 👻 process.on('SIGTERM')");
   logger.info("SIGTERM received, shutting down gracefully");
 
   await redisClient.quit();

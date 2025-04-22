@@ -1,6 +1,7 @@
 import request from "supertest";
 import { testConfig } from "./jest.setup";
 import { channel } from "diagnostics_channel";
+import WebSocket from "ws";
 const TEST_PREFIX = "__TEST__:";
 
 const TEST_DATA = {
@@ -44,6 +45,50 @@ async function cleanupTestData() {
       .expect(200);
   } catch (error) {
     console.error("Error during cleanup:", error);
+  }
+}
+
+/**
+ * Setup function to create test data
+ */
+async function setupTestData() {
+  try {
+    // Create test channels
+    await request(testConfig.API_URL)
+      .post("/api/channels")
+      .send(TEST_DATA.channels.public)
+      .expect(201);
+
+    await request(testConfig.API_URL)
+      .post("/api/channels")
+      .send(TEST_DATA.channels.private)
+      .expect(201);
+
+    // Create test clients
+    await request(testConfig.API_URL)
+      .post("/api/clients")
+      .send({
+        clientId: TEST_DATA.clients.clientA,
+        metadata: { name: "Test Client A" },
+      })
+      .expect(201);
+
+    await request(testConfig.API_URL)
+      .post("/api/clients")
+      .send({
+        clientId: TEST_DATA.clients.clientB,
+        metadata: { name: "Test Client B" },
+      })
+      .expect(201);
+
+    // Grant access to private channel for clientA
+    await request(testConfig.API_URL)
+      .post(`/api/channels/${TEST_DATA.channels.private.channel}/access/${TEST_DATA.clients.clientA}`)
+      .expect(200);
+
+  } catch (error) {
+    console.error("Error during setup:", error);
+    throw error;
   }
 }
 
@@ -407,6 +452,179 @@ describe("HTTP API E2E Tests", () => {
         .send({ clientId: testClientId })
         .expect("Content-Type", /json/)
         .expect(404);
+    });
+  });
+
+  /**
+   * Test WebSocket functionality
+   */
+  describe("WebSocket Tests", () => {
+    let wsClient: WebSocket;
+    const testMessage = {
+      type: "test",
+      content: "Test WebSocket message",
+    };
+
+    // Setup test data before all WebSocket tests
+    beforeAll(async () => {
+      await setupTestData();
+    });
+
+    afterEach(() => {
+      if (wsClient) {
+        wsClient.close();
+      }
+    });
+
+    describe("Connection", () => {
+      it("should establish WebSocket connection", (done) => {
+        wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
+
+        wsClient.on("open", () => {
+          expect(wsClient.readyState).toBe(WebSocket.OPEN);
+          done();
+        });
+
+        wsClient.on("error", (error) => {
+          done(error);
+        });
+      });
+
+      it("should handle connection errors", (done) => {
+        const invalidWsUrl = "ws://invalid-url";
+        wsClient = new WebSocket(invalidWsUrl);
+
+        wsClient.on("error", (error) => {
+          expect(error).toBeDefined();
+          done();
+        });
+      });
+    });
+
+    describe("Message Handling", () => {
+      beforeEach((done) => {
+        console.log('----------------0.1------------------');
+        wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
+        wsClient.on("open", () => {
+          console.log('----------------0.2------------------');
+          done();
+        });
+      });
+
+      it("should send and receive messages", async() => {
+        console.log('----------------0.3------------------');
+
+        await new Promise((resolve, reject) => {
+          wsClient.send(JSON.stringify({
+            type: "subscribe",
+            channel: TEST_DATA.channels.public.channel,
+          }));
+          resolve(void 0);
+        });
+        console.log('----------------0.3.1------------------');
+        // Send a notification to the channel after 300ms
+        setTimeout(async () => {
+          await request(testConfig.API_URL)
+            .post("/api/notifications")
+            .send({
+              channel: TEST_DATA.channels.public.channel,
+              message: "Test notification", 
+            })
+            .expect(200);
+        }, 300);
+        
+        console.log('----------------0.3.1------------------');
+        await new Promise((resolve, reject) => {  
+          wsClient.on("message", (data) => {
+            console.log('----------------1.0------------------');
+            const message = JSON.parse(data.toString());
+            expect(message).toEqual(testMessage);
+            resolve(void 0);
+          });
+        });
+        console.log('----------------0.4------------------');
+        
+      });
+
+      it("should handle invalid JSON messages", (done) => {
+        wsClient.on("error", (error) => {
+          expect(error).toBeDefined();
+          done();
+        });
+
+        wsClient.send("invalid json");
+      });
+    });
+
+    describe("Channel Subscription", () => {
+      it("should receive notifications for subscribed channel", (done) => {
+        wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
+        wsClient.on("open", () => {
+          // Subscribe to channel
+          wsClient.send(
+            JSON.stringify({
+              type: "subscribe",
+              channel: TEST_DATA.channels.public.channel,
+            })
+          );
+          // Send a notification to the channel
+          request(testConfig.API_URL)
+            .post("/api/notifications")
+            .send({
+              channel: TEST_DATA.channels.public.channel,
+              message: "Test notification",
+            })
+            .expect(200);
+        });
+
+        wsClient.on("message", (data) => {
+          const message = JSON.parse(data.toString());
+          console.log(message);
+          if (message.type === "notification") {
+            expect(message.channel).toBe(TEST_DATA.channels.public.channel);
+            expect(message.message).toBe("Test notification Web Socket");
+            done();
+          }
+        });
+      });
+
+      it("should not receive notifications for unsubscribed channel", (done) => {
+        wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
+        let receivedNotification = false;
+        wsClient.on("open", () => {
+          // Send a notification to the channel
+          request(testConfig.API_URL)
+            .post("/api/notifications")
+            .send({
+              channel: TEST_DATA.channels.public.channel,
+              message: "Test notification",
+            })
+            .expect(200);
+          // Wait for a short time to ensure no notification is received
+          setTimeout(() => {
+            expect(receivedNotification).toBe(false);
+            done();
+          }, 1000);
+        });
+
+        wsClient.on("message", () => {
+          receivedNotification = true;
+        });
+      });
+    });
+
+    describe("Disconnection", () => {
+      it("should handle client disconnection", (done) => {
+        wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
+        wsClient.on("open", () => {
+          wsClient.close();
+        });
+
+        wsClient.on("close", () => {
+          expect(wsClient.readyState).toBe(WebSocket.CLOSED);
+          done();
+        });
+      });
     });
   });
 }); 

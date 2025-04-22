@@ -25,6 +25,7 @@ export class WebSocketManager {
     private accessControl: AccessControlService,
     private notificationService: NotificationService
   ) {
+    console.log("🟥 👻 WebSocketManager constructor");
     this.clients = new Map();
     this.wss = new WebSocketServer({ noServer: true });
     this.setupWebSocketServer();
@@ -32,11 +33,13 @@ export class WebSocketManager {
   }
 
   private setupWebSocketServer(): void {
+    console.log("🟥 👻 setupWebSocketServer");
     this.wss.on("connection", this.handleConnection.bind(this));
     this.wss.on("error", this.handleServerError.bind(this));
   }
 
-  private startPingInterval(): void {
+  private startPingInterval(): void { 
+    console.log("🟥 👻 startPingInterval");
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
     }
@@ -46,6 +49,7 @@ export class WebSocketManager {
   }
 
   private checkConnections(): void {
+    console.log("🟥 👻 checkConnections");
     const now = Date.now();
     for (const [clientId, client] of this.clients.entries()) {
       if (!client.isAlive) {
@@ -60,10 +64,12 @@ export class WebSocketManager {
   }
 
   private handleServerError(error: Error): void {
+    console.log("🟥 👻 handleServerError");
     logger.error("WebSocket server error:", error);
   }
 
-  private async handleConnection(ws: WebSocket, clientId: string): Promise<void> {
+  public async handleConnection(ws: WebSocket, clientId: string): Promise<void> {
+    console.log("🟥 👻 handleConnection");
     try {
       // Validate client ID
       const isValid = await this.accessControl.validateClientId(clientId);
@@ -108,6 +114,7 @@ export class WebSocketManager {
   }
 
   private handlePong(clientId: string): void {
+    console.log("🟥 👻 handlePong");
     const client = this.clients.get(clientId);
     if (client) {
       client.isAlive = true;
@@ -115,7 +122,8 @@ export class WebSocketManager {
     }
   }
 
-  private async handleMessage(clientId: string, data: string | Buffer | ArrayBuffer | Buffer[]): Promise<void> {
+  private async handleMessage(clientId: string, data: string | Buffer | ArrayBuffer | Buffer[]): Promise<void> {  
+    console.log("🟥 👻 handleMessage");
     try {
       const client = this.clients.get(clientId);
       if (!client) {
@@ -149,6 +157,7 @@ export class WebSocketManager {
     client: WebSocketClient,
     message: SubscriptionRequest
   ): Promise<void> {
+    console.log("🟥 👻 handleSubscribe");
     try {
       const { channel } = message;
 
@@ -185,6 +194,7 @@ export class WebSocketManager {
     client: WebSocketClient,
     message: SubscriptionRequest
   ): Promise<void> {
+    console.log("🟥 👻 handleUnsubscribe");
     try {
       const { channel } = message;
 
@@ -211,6 +221,7 @@ export class WebSocketManager {
   }
 
   private async handleClose(clientId: string): Promise<void> {
+    console.log("🟥 👻 handleClose");
     try {
       const client = this.clients.get(clientId);
       if (!client) return;
@@ -229,11 +240,13 @@ export class WebSocketManager {
   }
 
   private handleError(clientId: string, error: Error): void {
+    console.log("🟥 👻 handleError");
     logger.error(`WebSocket error for client ${clientId}:`, error);
     this.closeClient(clientId, 1011, "Internal server error");
   }
 
-  private closeClient(clientId: string, code: number, reason: string): void {
+  private closeClient(clientId: string, code: number, reason: string): void { 
+    console.log("🟥 👻 closeClient");
     const client = this.clients.get(clientId);
     if (client) {
       client.ws.close(code, reason);
@@ -242,6 +255,7 @@ export class WebSocketManager {
   }
 
   private sendError(clientId: string, message: string): void {
+    console.log("🟥 👻 sendError");
     const client = this.clients.get(clientId);
     if (client) {
       client.ws.send(
@@ -255,11 +269,14 @@ export class WebSocketManager {
   }
 
   public async broadcastNotification(channel: string, notification: NotificationMessage): Promise<void> {
+    console.log("🟥 👻 broadcastNotification");
     try {
+      console.log("Broadcasting notification to channel:", channel);
+      console.log(`SMEMBERS subscription:${channel}`);
       // Get all subscribers for the channel
-      const subscribers = await this.redis.smembers(`channel:${channel}:subscribers`);
+      const subscribers = await this.redis.smembers(`subscription:${channel}`);
       logger.debug(`Broadcasting notification to ${subscribers.length} subscribers in channel ${channel}`);
-
+      console.log("Subscribers:", subscribers);
       // Send notification to each subscribed client
       for (const clientId of subscribers) {
         const client = this.clients.get(clientId);
@@ -284,15 +301,18 @@ export class WebSocketManager {
   }
 
   public getClientCount(): number {
+    console.log("🟥 👻 getClientCount");
     return this.clients.size;
   }
 
   public getSubscribedChannels(clientId: string): string[] {
+    console.log("🟥 👻 getSubscribedChannels");
     const client = this.clients.get(clientId);
     return client ? Array.from(client.subscribedChannels) : [];
   }
 
   public cleanup(): void {
+    console.log("🟥 👻 cleanup");
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
     }
@@ -308,6 +328,7 @@ export class WebSocketManager {
     head: any,
     clientId: string
   ): void {
+    console.log("🟥 👻 handleUpgrade"); 
     this.wss.handleUpgrade(request, socket, head, (ws) => {
       this.wss.emit("connection", ws, clientId);
     });
