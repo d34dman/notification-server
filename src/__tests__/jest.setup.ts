@@ -1,6 +1,5 @@
 import { config } from "dotenv";
 import path from "path";
-import { jest } from "@jest/globals";
 
 /**
  * Type definition for test configuration
@@ -25,9 +24,4 @@ export const testConfig: TestConfig = {
   API_URL: process.env.API_URL || "http://localhost:3000",
   WS_URL: process.env.WS_URL || "ws://localhost:8080",
   TIMEOUT: 10000, // 10 seconds
-};
-
-/**
- * Set test timeout
- */
-jest.setTimeout(testConfig.TIMEOUT); 
+}; 

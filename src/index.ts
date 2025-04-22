@@ -410,9 +410,14 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
     const { channel, clientId } = req.params;
 
     // First check if the channel exists
-    const rules = await redisClient.hgetall(`channel:${channel}:rules`);
-    if (!rules) {
+    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    if (!exists) {
       return res.status(404).json({ error: "Channel not found" });
+    }
+
+    const rules = await redisClient.hgetall(`channel:${channel}:rules`);
+    if (rules.isPublic == "1") {
+      return res.status(400).json({ error: "Clients cannot be added to public channels" });
     }
 
     // Add client to channel's allowed clients
@@ -450,6 +455,18 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
 app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
   try {
     const { channel, clientId } = req.params;
+
+    // First check if the channel exists
+    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    if (!exists) {
+      return res.status(404).json({ error: "Channel not found" });
+    }
+
+    const rules = await redisClient.hgetall(`channel:${channel}:rules`);
+    if (rules.isPublic == "1") {
+      return res.status(400).json({ error: "Clients cannot be deleted from public channels" });
+    }
+
     await accessControl.revokeChannelAccess(clientId, channel);
     res.json({ channel, clientId, accessRevoked: true });
   } catch (error) {
@@ -517,11 +534,14 @@ app.delete("/api/channels/:channel", async (req, res) => {
     await redisClient.del(`channel:${channel}:rules`);
 
     // Delete all subscriptions for this channel
-    const subscribers = await redisClient.smembers(`channel:${channel}:subscribers`);
+    const subscribers = await redisClient.smembers(`subscription:${channel}`);
     for (const clientId of subscribers) {
-      await redisClient.srem(`client:${clientId}:channels`, channel);
+      await redisClient.srem(`client-subscriptions:${clientId}`, channel);
     }
-    await redisClient.del(`channel:${channel}:subscribers`);
+    await redisClient.del(`subscription:${channel}`);
+
+    // Delete all notifications for this channel
+    await redisClient.del(`notification:${channel}`);
 
     res.status(200).json({
       message: `Channel '${channel}' deleted successfully`,
