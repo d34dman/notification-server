@@ -344,6 +344,8 @@ app.post("/api/clients", async (req, res) => {
     if (clientId) {
       const isValid = await accessControl.validateClientId(clientId);
       if (isValid) {
+        // Refresh expiration on successful validation
+        await accessControl.refreshClientId(clientId);
         return res.status(200).json({
           clientId,
           message: "Client ID is valid",
@@ -382,6 +384,11 @@ app.get("/api/clients/:clientId", async (req, res) => {
   try {
     const { clientId } = req.params;
     const isValid = await accessControl.validateClientId(clientId);
+    if (!isValid) {
+      return res.status(400).json({ error: "Invalid client ID" });
+    }
+    // Refresh expiration on successful validation
+    await accessControl.refreshClientId(clientId);
     res.json({ isValid });
   } catch (error) {
     logger.error("Error validating client ID:", error);

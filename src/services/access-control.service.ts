@@ -74,12 +74,7 @@ export class AccessControlService {
    */
   public async validateClientId(clientId: string): Promise<boolean> {
     const exists = await this.redis.exists(`client:${clientId}`);
-    if (exists === 1) {
-      // Refresh expiration on successful validation
-      await this.refreshClientId(clientId);
-      return true;
-    }
-    return false;
+    return exists === 1;
   }
 
   /**
