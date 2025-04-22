@@ -99,6 +99,12 @@ app.post("/api/notifications", async (req, res) => {
       return res.status(400).json({ error: "Channel and message are required" });
     }
 
+    // If channel doesn't exist, return 404
+    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    if (!exists) {
+      return res.status(404).json({ error: "Channel does not exist" });
+    }
+
     const notification = {
       id: uuidv4(),
       channel,
@@ -136,6 +142,12 @@ app.get("/api/notifications/:channel", async (req, res) => {
     const { channel } = req.params;
     const { limit = 10 } = req.query;
 
+    // If channel doesn't exist, return 404
+    const exists = await redisClient.exists(`channel:${channel}:rules`);
+    if (!exists) {
+      return res.status(404).json({ error: "Channel does not exist" });
+    }
+
     const notifications = await notificationService.getNotifications(channel, Number(limit));
 
     res.json(notifications);
@@ -164,6 +176,12 @@ app.post("/api/channels/:channel/subscribe", async (req, res) => {
 
   if (!clientId) {
     return res.status(400).json({ error: "Client ID is required" });
+  }
+
+  // If channel doesn't exist, return 404
+  const exists = await redisClient.exists(`channel:${channel}:rules`);
+  if (!exists) {
+    return res.status(404).json({ error: "Channel does not exist" });
   }
 
   try {
