@@ -448,7 +448,7 @@ app.post("/api/channels", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
-  logger.debug("[API] Channel access request received for channel: ${req.params.channel}, client: ${req.params.clientId}");
+  logger.debug(`[API] Channel access request received for channel: ${req.params.channel}, client: ${req.params.clientId}`);
   try {
     const { channel, clientId } = req.params;
 
@@ -499,7 +499,7 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
-  logger.debug("[API] Channel deletion request received for channel: ${req.params.channel}");
+  logger.debug(`[API] Channel deletion request received for channel: ${req.params.channel}`);
   try {
     const { channel, clientId } = req.params;
 
@@ -564,7 +564,7 @@ app.post("/api/test/private-channel", async (req, res) => {
 
 // Delete channel endpoint
 app.delete("/api/channels/:channel", async (req, res) => {
-  logger.debug("[API] Channel deletion request received for channel: ${req.params.channel}");
+  logger.debug(`[API] Channel deletion request received for channel: ${req.params.channel}`);
   try {
     const { channel } = req.params;
 
