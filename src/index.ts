@@ -189,7 +189,6 @@ app.get("/api/notifications/:channel", async (req, res) => {
  *
  * This endpoint is used to subscribe to a specific channel.
  *
- * @deprecated This endpoint is deprecated. Use the WebSocket connection instead.
  * @group Server API
  * @route POST /api/channels/:channel/subscribe
  * @param {string} req.params.channel - The channel to subscribe to.
@@ -225,7 +224,6 @@ app.post("/api/channels/:channel/subscribe", async (req, res) => {
  *
  * This endpoint is used to unsubscribe from a specific channel.
  *
- * @deprecated This endpoint is deprecated. Use the WebSocket connection instead.
  * @group Server API
  * @route POST /api/channels/:channel/unsubscribe
  * @param {string} req.params.channel - The channel to unsubscribe from.
