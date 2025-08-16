@@ -66,7 +66,7 @@ The system consists of two main components:
 
 3. Configure environment variables:
    ```bash
-   cp .env.example .env
+   cp env.example .env
    # Edit .env with your configuration
    ```
 
@@ -79,6 +79,12 @@ The system consists of two main components:
    ```bash
    npm start
    ```
+
+## Testing
+
+⚠️ **Important**: The test suite includes E2E tests that require a running server and Redis instance.
+
+For development and testing, see the [Development > Running Tests](#running-tests) section for detailed setup instructions.
 
 ## API Documentation
 
@@ -148,6 +154,38 @@ The WebSocket API is documented in `asyncapi.yaml` and supports the following me
 - Client IDs expire after a configurable period
 - Channel access can be revoked at any time
 - Access patterns can be restricted using regex patterns
+- **CORS Configuration**: Supports single or multiple allowed origins
+
+## CORS Configuration
+
+The server supports flexible CORS configuration for both HTTP API and WebSocket connections:
+
+### **Single Origin**
+```bash
+CORS_ORIGIN=http://localhost:3000
+```
+
+### **Multiple Origins** (comma-separated)
+```bash
+CORS_ORIGIN=http://localhost:3000,https://app.example.com,https://admin.example.com
+```
+
+### **Allow All Origins** (default, use with caution in production)
+```bash
+CORS_ORIGIN=*
+```
+
+### **Environment Examples**
+
+**Development**: Multiple local development servers
+```bash
+CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:8080
+```
+
+**Production**: Specific trusted domains
+```bash
+CORS_ORIGIN=https://app.yourcompany.com,https://admin.yourcompany.com
+```
 
 ## Usage Example
 
@@ -195,8 +233,59 @@ The WebSocket API is documented in `asyncapi.yaml` and supports the following me
 
 ### Running Tests
 
+The project includes comprehensive E2E tests that require both the notification server and Redis to be running.
+
+#### **Prerequisites for Testing**
+- Redis server running on port 6379
+- Notification server running on ports 3000 (HTTP) and 8080 (WebSocket)
+
+#### **Option 1: Manual Test Setup**
+
+1. **Start Redis:**
+   ```bash
+   # Using Docker
+   docker run -d --name test-redis -p 6379:6379 redis:7-alpine
+   
+   # Or using local Redis installation
+   redis-server
+   ```
+
+2. **Start the Notification Server:**
+   ```bash
+   # In a separate terminal
+   PORT=3000 WS_PORT=8080 REDIS_URL=redis://localhost:6379 npm run dev
+   ```
+
+3. **Run Tests:**
+   ```bash
+   # In another terminal
+   npm test
+   ```
+
+4. **Cleanup:**
+   ```bash
+   # Stop Redis container
+   docker stop test-redis && docker rm test-redis
+   
+   # Stop the dev server (Ctrl+C in the dev terminal)
+   ```
+
+#### **Option 2: Test Script** (Coming Soon)
 ```bash
-npm test
+# Future enhancement - automated test setup
+npm run test:e2e
+```
+
+#### **Test Types**
+- **HTTP API E2E Tests**: Test all REST endpoints (25 tests)
+- **WebSocket E2E Tests**: Test real-time functionality (5 tests)
+- **CORS Configuration Tests**: Test multiple origin support (8 tests)
+
+#### **Unit Tests Only**
+To run only unit tests without E2E requirements:
+```bash
+# Run specific test files
+npm test -- src/__tests__/cors.test.ts
 ```
 
 ### Linting

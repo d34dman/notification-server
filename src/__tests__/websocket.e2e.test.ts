@@ -26,7 +26,7 @@ describe("WebSocket E2E Tests", () => {
   });
 
   describe("Connection", () => {
-    it("should establish WebSocket connection", (done) => {
+    it("should establish WebSocket connection", done => {
       wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
 
       wsClient.on("open", () => {
@@ -34,16 +34,16 @@ describe("WebSocket E2E Tests", () => {
         done();
       });
 
-      wsClient.on("error", (error) => {
+      wsClient.on("error", error => {
         done(error);
       });
     });
 
-    it("should handle connection errors", (done) => {
+    it("should handle connection errors", done => {
       const invalidWsUrl = "ws://invalid-url";
       wsClient = new WebSocket(invalidWsUrl);
 
-      wsClient.on("error", (error) => {
+      wsClient.on("error", error => {
         expect(error).toBeDefined();
         done();
       });
@@ -51,7 +51,7 @@ describe("WebSocket E2E Tests", () => {
   });
 
   describe("Channel Subscription", () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
       wsClient.on("open", () => {
         done();
@@ -60,10 +60,12 @@ describe("WebSocket E2E Tests", () => {
 
     it("should receive notifications for subscribed channel", async () => {
       setTimeout(() => {
-        wsClient.send(JSON.stringify({
-          type: "subscribe",
-          channel: TEST_DATA.channels.public.channel,
-        }));
+        wsClient.send(
+          JSON.stringify({
+            type: "subscribe",
+            channel: TEST_DATA.channels.public.channel,
+          })
+        );
       }, 100);
 
       const testNotification = {
@@ -78,9 +80,8 @@ describe("WebSocket E2E Tests", () => {
           .expect(200);
       }, 500);
 
-
       // Wait for WebSocket message
-      const wsMessage = await new Promise<any>((resolve) => {
+      const wsMessage = await new Promise<any>(resolve => {
         wsClient.on("message", (data: Buffer) => {
           const message = JSON.parse(data.toString());
           if (message.type === "notification") {
@@ -94,7 +95,7 @@ describe("WebSocket E2E Tests", () => {
       expect(wsMessage.channel).toEqual(testNotification.channel);
     });
 
-    it("should not receive notifications for unsubscribed channel", (done) => {
+    it("should not receive notifications for unsubscribed channel", done => {
       wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
       let receivedNotification = false;
 
@@ -124,7 +125,7 @@ describe("WebSocket E2E Tests", () => {
   });
 
   describe("Disconnection", () => {
-    it("should handle client disconnection", (done) => {
+    it("should handle client disconnection", done => {
       wsClient = new WebSocket(testConfig.WS_URL + `?clientId=${TEST_DATA.clients.clientA}`);
       wsClient.on("open", () => {
         wsClient.close();
@@ -136,4 +137,4 @@ describe("WebSocket E2E Tests", () => {
       });
     });
   });
-}); 
+});

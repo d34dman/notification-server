@@ -40,17 +40,39 @@ const app = express();
 const httpServer = createServer(app);
 logger.debug("[SERVER] Express app and HTTP server initialized");
 
+// Parse CORS origins from environment variable
+const parseCorsOrigins = (corsOrigin: string): string[] | boolean => {
+  if (!corsOrigin || corsOrigin === "*") {
+    return true; // Allow all origins
+  }
+  // Split by comma and trim whitespace
+  return corsOrigin
+    .split(",")
+    .map(origin => origin.trim())
+    .filter(origin => origin.length > 0);
+};
+
+const allowedOrigins = parseCorsOrigins(process.env.CORS_ORIGIN || "*");
+
 // Create WebSocket server with CORS configuration
 const wss = new WebSocketServer({
   port: parseInt(process.env.WS_PORT || "8080", 10),
   verifyClient: (info, callback) => {
     const origin = info.origin || info.req.headers.origin;
-    const allowedOrigin = process.env.CORS_ORIGIN || "*";
 
-    if (allowedOrigin === "*" || origin === allowedOrigin) {
+    // If allowedOrigins is true, allow all origins
+    if (allowedOrigins === true) {
+      callback(true);
+      return;
+    }
+
+    // Check if origin is in the allowed list
+    if (Array.isArray(allowedOrigins) && origin && allowedOrigins.includes(origin)) {
       callback(true);
     } else {
-      logger.warn(`Rejected connection from unauthorized origin: ${origin}`);
+      logger.warn(
+        `Rejected WebSocket connection from unauthorized origin: ${origin || "undefined"}`
+      );
       callback(false, 403, "Origin not allowed");
     }
   },
@@ -60,11 +82,7 @@ logger.debug(`[WS] WebSocket server initialized on port ${process.env.WS_PORT ||
 // Create Redis client
 const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
-// Initialize Redis connection
-const initializeRedis = async () => {
-  await redisClient.connect();
-  logger.debug(`[REDIS] Connected to ${process.env.REDIS_URL || "redis://localhost:6379"}`);
-};
+// Redis client will connect automatically on first operation
 
 // Create services
 const notificationService = new NotificationService(redisClient);
@@ -90,7 +108,7 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
     credentials: true,
@@ -173,7 +191,7 @@ app.get("/api/notifications/:channel", async (req, res) => {
     const exists = await accessControl.validateChannel(channel);
     if (!exists) {
       return res.status(404).json({ error: "Channel not found" });
-    } 
+    }
 
     const notifications = await notificationService.getNotifications(channel, Number(limit));
 
@@ -204,7 +222,7 @@ app.post("/api/channels/:channel/subscribe", async (req, res) => {
   const exists = await accessControl.validateChannel(channel);
   if (!exists) {
     return res.status(404).json({ error: "Channel not found" });
-  } 
+  }
 
   if (!clientId) {
     return res.status(400).json({ error: "Client ID is required" });
@@ -310,7 +328,9 @@ app.get("/api/channels/:channel/subscribers", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.get("/api/clients/:clientId/channels/:channel", async (req, res) => {
-  logger.debug(`[API] Check access request for client: ${req.params.clientId}, channel: ${req.params.channel}`);
+  logger.debug(
+    `[API] Check access request for client: ${req.params.clientId}, channel: ${req.params.channel}`
+  );
   const { clientId, channel } = req.params;
 
   try {
@@ -415,7 +435,6 @@ app.post("/api/channels", async (req, res) => {
       return res.status(400).json({ error: "Channel name is required" });
     }
 
-
     // Check if channel exists
     const exists = await accessControl.validateChannel(channel);
     if (exists) {
@@ -446,7 +465,9 @@ app.post("/api/channels", async (req, res) => {
  * @returns {object} 400 - The error object.
  */
 app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
-  logger.debug(`[API] Channel access request received for channel: ${req.params.channel}, client: ${req.params.clientId}`);
+  logger.debug(
+    `[API] Channel access request received for channel: ${req.params.channel}, client: ${req.params.clientId}`
+  );
   try {
     const { channel, clientId } = req.params;
 
@@ -454,7 +475,7 @@ app.post("/api/channels/:channel/access/:clientId", async (req, res) => {
     const exists = await accessControl.validateChannel(channel);
     if (!exists) {
       return res.status(404).json({ error: "Channel not found" });
-    } 
+    }
 
     // Get the rules for the channel
     const rules = await accessControl.getChannelRules(channel);
@@ -505,7 +526,7 @@ app.delete("/api/channels/:channel/access/:clientId", async (req, res) => {
     const exists = await accessControl.validateChannel(channel);
     if (!exists) {
       return res.status(404).json({ error: "Channel not found" });
-    } 
+    }
 
     // Get the rules for the channel
     const rules = await accessControl.getChannelRules(channel);

@@ -26,8 +26,8 @@ export const TEST_DATA = {
     },
     nonExistentChannel: {
       channel: TEST_PREFIX + "channel:non-existent:" + Math.random().toString(36).substring(2, 15),
-      rules: {}
-    }
+      rules: {},
+    },
   },
 };
 
@@ -50,22 +50,20 @@ export async function cleanupTestData() {
     logger.debug(`[TEST] Deleting test client: ${TEST_DATA.clients.clientA}`);
     await request(testConfig.API_URL)
       .delete(`/api/clients/${TEST_DATA.clients.clientA}`)
-      .expect((res) => {
+      .expect(res => {
         if (res.status !== 200 && res.status !== 476 && res.status !== 404) {
           throw new Error(`Expected status 200, 476, or 404, got ${res.status}`);
         }
       });
-    logger.debug(`[TEST] Deleting test client: ${TEST_DATA.clients.clientB}`);  
+    logger.debug(`[TEST] Deleting test client: ${TEST_DATA.clients.clientB}`);
     await request(testConfig.API_URL)
       .delete(`/api/clients/${TEST_DATA.clients.clientB}`)
-      .expect((res) => {
+      .expect(res => {
         if (res.status !== 200 && res.status !== 476 && res.status !== 404) {
           throw new Error(`Expected status 200, 476, or 404, got ${res.status}`);
         }
       });
-
-  } 
-  catch (error) {
+  } catch (error) {
     console.error("Error during cleanup:", error);
   }
 }
@@ -105,11 +103,12 @@ export async function setupTestData() {
 
     // Grant access to private channel for clientA
     await request(testConfig.API_URL)
-      .post(`/api/channels/${TEST_DATA.channels.private.channel}/access/${TEST_DATA.clients.clientA}`)
+      .post(
+        `/api/channels/${TEST_DATA.channels.private.channel}/access/${TEST_DATA.clients.clientA}`
+      )
       .expect(200);
-
   } catch (error) {
     console.error("Error during setup:", error);
     throw error;
   }
-} 
+}

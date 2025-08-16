@@ -48,7 +48,7 @@ describe("HTTP API E2E Tests", () => {
           .expect(201);
 
         expect(response.body).toEqual({
-          message: 'New client ID generated',
+          message: "New client ID generated",
           clientId: TEST_DATA.clients.clientA,
         });
       });
@@ -60,13 +60,11 @@ describe("HTTP API E2E Tests", () => {
           .expect("Content-Type", /json/)
           .expect(201);
         expect(response.body).toEqual({
-          message: 'New client ID generated',
+          message: "New client ID generated",
           clientId: expect.any(String),
         });
         const newClientId = response.body.clientId;
-        await request(testConfig.API_URL)
-          .delete(`/api/clients/${newClientId}`)
-          .expect(200);
+        await request(testConfig.API_URL).delete(`/api/clients/${newClientId}`).expect(200);
       });
 
       it("should return 200 for duplicate client id", async () => {
@@ -84,7 +82,7 @@ describe("HTTP API E2E Tests", () => {
           .expect(200);
 
         expect(response.body).toEqual({
-          message: 'Client ID is valid',
+          message: "Client ID is valid",
           clientId: TEST_DATA.clients.clientA,
         });
       });
@@ -129,7 +127,7 @@ describe("HTTP API E2E Tests", () => {
         .expect("Content-Type", /json/)
         .expect(201);
       expect(response.body).toEqual({
-        ...testChannel
+        ...testChannel,
       });
     });
 
@@ -140,7 +138,7 @@ describe("HTTP API E2E Tests", () => {
         .expect("Content-Type", /json/)
         .expect(201);
       expect(response.body).toEqual({
-        ...testPrivateChannel
+        ...testPrivateChannel,
       });
     });
 
@@ -317,7 +315,8 @@ describe("HTTP API E2E Tests", () => {
     });
 
     it("should return 404 for non-existent channel", async () => {
-      const nonExistentChannel = TEST_PREFIX + "non-existent-channel" + Math.random().toString(36).substring(2, 15);
+      const nonExistentChannel =
+        TEST_PREFIX + "non-existent-channel" + Math.random().toString(36).substring(2, 15);
 
       await request(testConfig.API_URL)
         .get(`/api/notifications/${nonExistentChannel}`)
@@ -355,7 +354,8 @@ describe("HTTP API E2E Tests", () => {
     });
 
     it("should return 404 for non-existent channel", async () => {
-      const nonExistentChannel = TEST_PREFIX + "non-existent-channel" + Math.random().toString(36).substring(2, 15) ;
+      const nonExistentChannel =
+        TEST_PREFIX + "non-existent-channel" + Math.random().toString(36).substring(2, 15);
 
       await request(testConfig.API_URL)
         .post(`/api/channels/${nonExistentChannel}/subscribe`)
@@ -364,4 +364,4 @@ describe("HTTP API E2E Tests", () => {
         .expect(404);
     });
   });
-}); 
+});
