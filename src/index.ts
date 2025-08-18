@@ -14,6 +14,29 @@ import { errorHandler } from "./middleware/error.middleware";
 import { validateEnv } from "./utils/env";
 import { AccessControlService } from "./services/access-control.service";
 
+// Import version info with fallback for development
+let versionInfo: {
+  name: string;
+  version: string;
+  shortCommitHash: string;
+  commitHash: string;
+  buildTime: string;
+};
+
+try {
+  versionInfo = require("./version.json");
+} catch {
+  // Fallback for development when version.json doesn't exist
+  const packageJson = require("../package.json");
+  versionInfo = {
+    name: packageJson.name,
+    version: packageJson.version,
+    shortCommitHash: "dev",
+    commitHash: "development",
+    buildTime: new Date().toISOString(),
+  };
+}
+
 // Load environment variables
 const envLoaded = dotenv.config();
 if (!envLoaded) {
@@ -34,6 +57,10 @@ try {
 // Set logger level
 logger.level = process.env.LOG_LEVEL || "info";
 logger.debug(`[LOGGER] Log level set to: ${logger.level}`);
+
+// Log application version with commit hash
+logger.info(`🚀 Starting ${versionInfo.name} v${versionInfo.version} (${versionInfo.shortCommitHash})`);
+logger.debug(`[VERSION] Build time: ${versionInfo.buildTime}`);
 
 // Create Express app
 const app = express();
