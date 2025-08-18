@@ -1,11 +1,11 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { logger } from "../utils/logger";
 
 export interface AppError extends Error {
   statusCode?: number;
 }
 
-export function errorHandler(err: AppError, req: Request, res: Response): void {
+export function errorHandler(err: AppError, req: Request, res: Response, next: NextFunction): void {
   const statusCode = err.statusCode || 500;
 
   logger.error(`Error: ${err.message}`, {
