@@ -335,7 +335,7 @@ export class WebSocketManager {
     logger.debug("[WS] Broadcasting notification to channel");
     try {
       const subscribers = await this.subscriptionService.getChannelSubscribers(channel);
-      logger.debug("[WS] Found subscribers for channel: ${subscribers.length}");
+      logger.debug(`[WS] Found subscribers for channel: ${subscribers.length}`);
       for (const clientId of subscribers) {
         // Check if client still has access to the channel
         const hasAccess = await this.accessControl.hasChannelAccess(clientId, channel);
