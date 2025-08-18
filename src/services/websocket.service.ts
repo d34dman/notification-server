@@ -351,7 +351,7 @@ export class WebSocketManager {
 
         const client = this.clients.get(clientId);
         if (client && client.ws.readyState === WebSocket.OPEN) {
-          logger.debug("[WS] Sending notification to client: ${clientId}");
+          logger.debug(`[WS] Sending notification to client: ${clientId}`);
           client.ws.send(
             JSON.stringify({
               type: "notification",
